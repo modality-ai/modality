@@ -41,8 +41,8 @@
  * entrypoints — e.g. `bun build ./src/cli.ts ./src/scripts/commands/*.ts` —
  * or the scan will find an empty directory at runtime.
  */
-import { readdirSync, existsSync, type Dirent } from "node:fs";
-import { join, basename, extname, isAbsolute, dirname, sep } from "node:path";
+import { readdirSync, writeFileSync, existsSync, realpathSync, type Dirent } from "node:fs";
+import { join, basename, extname, isAbsolute, dirname, sep, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { CLICommand } from "./help/types";
 import { createCommandRegistry, type CommandRegistry } from "./registry";
@@ -179,21 +179,25 @@ function isCommandShaped(value: unknown): boolean {
 
 /**
  * Pick the command out of a loaded module: the single export whose name ends
- * with `exportSuffix`. Returns `undefined` when the module has none — a helper
- * that landed in the directory by mistake, or a command whose export was
- * renamed mid-refactor. A module exporting several matches is equally broken
- * and is skipped with a warning naming the file, instead of silently keeping
- * only the first.
+ * with `exportSuffix`, returned together with its key. Returns `undefined` when
+ * the module has none — a helper that landed in the directory by mistake, or a
+ * command whose export was renamed mid-refactor. A module exporting several
+ * matches is equally broken and is skipped with a warning naming the file,
+ * instead of silently keeping only the first.
+ *
+ * The key matters to {@link generateCommandsIndex}, which must emit a static
+ * `import { <key> }` for each command it finds.
  */
-function commandFromModule(
+function commandExportOf(
   mod: Record<string, unknown>,
   exportSuffix: string,
   file: string,
-): CLICommand | undefined {
+): { key: string; command: CLICommand } | undefined {
   const matches = Object.entries(mod).filter(
     ([key, value]) => key.endsWith(exportSuffix) && isCommandShaped(value),
   );
-  if (matches.length === 1) return matches[0]![1] as CLICommand;
+  if (matches.length === 1)
+    return { key: matches[0]![0]!, command: matches[0]![1] as CLICommand };
   // Zero or several matches are equally broken files — name the problem
   // precisely so the author can find and fix it.
   console.error(
@@ -202,6 +206,14 @@ function commandFromModule(
       : `[registry] Warning: "${file}" exports ${matches.length} *${exportSuffix} exports — expected exactly one — skipped`,
   );
   return undefined;
+}
+
+function commandFromModule(
+  mod: Record<string, unknown>,
+  exportSuffix: string,
+  file: string,
+): CLICommand | undefined {
+  return commandExportOf(mod, exportSuffix, file)?.command;
 }
 
 /**
@@ -272,4 +284,159 @@ export async function createCommandRegistryFromDir(
   // caller actually invoked, then hand the resolved path down.
   const dirPath = resolveDir(dir, "createCommandRegistryFromDir");
   return createCommandRegistry(await loadCommandsFromDir(dirPath, options), aliases);
+}
+
+/** Options for {@link generateCommandsIndex}. */
+export interface GenerateCommandsIndexOptions extends LoadCommandsOptions {
+  /** Absolute path to write the generated module to. */
+  out: string | URL;
+}
+
+/**
+ * The import specifier a generated module should use to reach a command module
+ * sitting next to it: a relative, extension-free, `./`-prefixed path.
+ */
+function importSpecifier(fromFile: string, toFile: string): string {
+  let rel = relative(dirname(fromFile), toFile).split(sep).join("/");
+  rel = rel.replace(/\.\w+$/, ""); // drop the source extension (.ts / .js)
+  return rel.startsWith(".") ? rel : `./${rel}`;
+}
+
+/**
+ * Canonical form of a may-not-exist-yet file path. Generated output is
+ * compared against scanned files and turned into relative imports, so both
+ * sides must share the same spelling — a symlinked cwd (`/var` → `/private/var`
+ * on macOS, for instance) would otherwise defeat the `out` collision guard and
+ * emit imports that walk across the symlink boundary.
+ */
+function canonicalFilePath(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    try {
+      return join(realpathSync(dirname(p)), basename(p));
+    } catch {
+      return p;
+    }
+  }
+}
+
+/**
+ * Generate a static commands-index module from a commands directory.
+ *
+ * Applies the *same* discovery rules as {@link loadCommandsFromDir} — sorted,
+ * basename-deduped, warn-and-skip on a broken file — but instead of importing
+ * every command at runtime it emits a TypeScript module that statically imports
+ * each one into a single `commands` array:
+ *
+ * ```ts
+ * // generated.commands.ts
+ * import { fooCommand } from "./commands/foo";
+ * import { barCommand } from "./commands/bar";
+ * export const commands: CLICommand[] = [fooCommand, barCommand];
+ * ```
+ *
+ * A CLI builds its registry with {@link createCommandRegistry} on that list, so
+ * the bundler renders **one shared dependency graph** — no per-command
+ * entrypoints, and no runtime directory scan on every launch. The directory
+ * stays the source of truth: adding a command is dropping in a file and
+ * re-running this during the build; there is no hand-written index to maintain.
+ * This is the production counterpart to the runtime scan: use it when startup
+ * cost matters and the commands are known at build time.
+ *
+ * @param dir      The commands directory, as a `file:` URL or an absolute path.
+ * @param options  `out` (required, absolute) and `exportSuffix` (default "Command").
+ * @returns        The generated module source (written to `out` as a side effect).
+ */
+export async function generateCommandsIndex(
+  dir: string | URL,
+  options: GenerateCommandsIndexOptions,
+): Promise<string> {
+  const { exportSuffix = "Command", out } = options;
+  const dirPath = resolveDir(dir, "generateCommandsIndex");
+  if (typeof out === "string" && !isAbsolute(out)) {
+    throw new Error(
+      `generateCommandsIndex: out must be an absolute path – ${out}`,
+    );
+  }
+  const outPath = canonicalFilePath(
+    typeof out === "string" ? resolve(out) : fileURLToPath(out),
+  );
+  if (!existsSync(dirPath)) {
+    console.error(`[registry] Warning: commands directory not found — ${dirPath}`);
+    return "";
+  }
+  // Scan the canonical directory so generated specifiers and the `out`
+  // collision check compare like for like — see {@link canonicalFilePath}.
+  const scanDir = realpathSync(dirPath);
+
+  const imports: string[] = [];
+  const names: string[] = [];
+  for (const file of commandFilesIn(scanDir)) {
+    const path = join(scanDir, file);
+    // Never scan the module this very call is about to write — a generated
+    // file is not a command, so an `out` placed inside the directory must not
+    // be re-scanned (and warned about) on the next regeneration. The one
+    // exception: a real command file sitting at `out` (e.g. `--out` named an
+    // existing command by mistake) — overwriting it would destroy it, so refuse.
+    if (resolve(path) === outPath) {
+      // A normal regeneration replaces the previous generated module — do not
+      // scan it (that would re-warn about it as a non-command). The exception:
+      // a real command file sitting at `out` (e.g. `--out` named an existing
+      // command by mistake) — overwriting it would destroy it, so refuse.
+      try {
+        const existing = (await import(
+          pathToFileURL(path).href,
+        )) as Record<string, unknown>;
+        const isCommand = Object.entries(existing).some(
+          ([key, value]) =>
+            key.endsWith(exportSuffix) && isCommandShaped(value),
+        );
+        if (isCommand) {
+          throw new Error(
+            `generateCommandsIndex: out names an existing command file — refusing to overwrite — ${outPath}`,
+          );
+        }
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("refusing to overwrite")
+        ) {
+          throw error;
+        }
+        // Not importable as a module (e.g. a stale generated file) — safe to
+        // replace with fresh output.
+      }
+      continue;
+    }
+    let mod: Record<string, unknown>;
+    try {
+      // A bare absolute path is not a valid specifier on Windows; file: URL is.
+      mod = (await import(pathToFileURL(path).href)) as Record<string, unknown>;
+    } catch (error) {
+      console.error(
+        `[registry] Warning: failed to load "${file}" — ${error instanceof Error ? error.message : String(error)}`,
+      );
+      continue;
+    }
+    const found = commandExportOf(mod, exportSuffix, file);
+    if (!found) continue;
+    imports.push(`import { ${found.key} } from "${importSpecifier(outPath, path)}";`);
+    names.push(found.key);
+  }
+
+  const source =
+    [
+      `// ── Generated by modality-cli-kit — do not edit by hand.`,
+      `// Regenerate with generateCommandsIndex(); the commands directory is the`,
+      `// single source of truth.`,
+      `import type { CLICommand } from "modality-cli-kit";`,
+      ...imports,
+      ``,
+      `export const commands: CLICommand[] = [${names.join(", ")}];`,
+      ``,
+    ].join("\n");
+
+  writeFileSync(outPath, source, "utf-8");
+  return source;
 }

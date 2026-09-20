@@ -18,6 +18,11 @@ export type { CommandRegistry, CommandResolution } from "./registry";
 // module, so adding or removing a command is adding or removing a file.
 export { createCommandRegistryFromDir, loadCommandsFromDir, resolveCommandsDir } from "./commandsDir";
 export type { LoadCommandsOptions, ResolveCommandsDirOptions } from "./commandsDir";
+// Build-time counterpart: generate a static commands-index module from the same
+// directory, so a bundled CLI renders one shared dependency graph instead of
+// paying per-command entrypoints or a startup directory scan.
+export { generateCommandsIndex } from "./commandsDir";
+export type { GenerateCommandsIndexOptions } from "./commandsDir";
 export { createCliRunner } from "./createCliRunner";
 export type { CliRunner, CliRunnerOptions } from "./createCliRunner";
 // Exported so a CLI that renders help itself (e.g. an MCP-tool help path) can

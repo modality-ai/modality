@@ -1,5 +1,5 @@
 {
-  "version": "0.10.1",
+  "version": "0.11.0",
   "name": "modality-cli-kit",
   "repository": {
     "type": "git",
@@ -29,11 +29,15 @@
   "types": "./dist/types/index.d.ts",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
+  "bin": {
+    "modality-cli": "./dist/cli.js"
+  },
   "scripts": {
     "build:clean": "find ./dist -name '*.*' | xargs rm -rf",
     "build:types": "bun tsc -p ./",
     "build:src": "bun build src/index.ts --outdir dist --target=node --external @modality-counter/core",
-    "build": "bun run build:clean && bun run build:types && bun run build:src",
+    "build:cli": "bun build src/cli.ts --outdir dist --target=bun --external @modality-counter/core",
+    "build": "bun run build:clean && bun run build:types && bun run build:src && bun run build:cli",
     "test": "npm run build && bun test",
     "prepublishOnly": "npm t"
   },
