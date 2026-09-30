@@ -15,7 +15,7 @@
   "dependencies": {
     "@types/bun": "^1.4.2",
     "typescript": "^7.0.2",
-    "zod": "^4.6.4"
+    "zod": "^4.6.5"
   },
   "exports": {
     "types": "./dist/types/index.d.ts",
