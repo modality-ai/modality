@@ -56,6 +56,7 @@ console.log(getHelp({ cliName: "my-cli", commands, command: "open" }));
 | Function                                                   | Purpose                               |
 | ---------------------------------------------------------- | ------------------------------------- |
 | `getHelp(options)`                                         | Unified entry: global or per-command  |
+| `defineCliConfig(config)`                                  | Declare the CLI config once, shared by `createCliRunner` and `getHelp` |
 | `renderSection(heading, entries)`                          | Render a categorized command section  |
 | `rejectUnknownFlags(command, args)`                        | Validate args against known flags     |
 | `knownFlags(command, extraFlags?)`                         | Extract known flag set                |

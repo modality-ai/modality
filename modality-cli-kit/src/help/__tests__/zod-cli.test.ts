@@ -813,10 +813,20 @@ describe("buildCLICommandValidator", () => {
 
 // ── createFlatCommandSchema ─────────────────────────────────────────
 
+/**
+ * Assert the bundle selector carries the optional wrapper the flattened schema
+ * gives it, and hand back the type it wraps so each test can name the inner
+ * type it expects.
+ */
+function expectOptional(field: unknown): z.ZodType {
+  expect(field).toBeInstanceOf(z.ZodOptional);
+  return (field as z.ZodOptional<z.ZodType>).unwrap();
+}
+
 describe("createFlatCommandSchema", () => {
   test("empty commands → command field is z.string, no extra fields", () => {
     const schema = createFlatCommandSchema([]);
-    expect(schema.shape.command).toBeInstanceOf(z.ZodString);
+    expect(expectOptional(schema.shape.command)).toBeInstanceOf(z.ZodString);
     expect(Object.keys(schema.shape)).toEqual(["command"]);
   });
 
@@ -828,8 +838,9 @@ describe("createFlatCommandSchema", () => {
     });
     const schema = createFlatCommandSchema([cmd]);
     const cmdField = schema.shape.command!;
-    expect(cmdField).toBeInstanceOf(z.ZodLiteral);
+    expect(expectOptional(cmdField)).toBeInstanceOf(z.ZodLiteral);
     expect(cmdField.parse("open")).toBe("open");
+    expect(cmdField.parse(undefined)).toBeUndefined();
     expect(() => cmdField.parse("other")).toThrow();
   });
 
@@ -845,7 +856,7 @@ describe("createFlatCommandSchema", () => {
       inputSchema: z.object({ y: z.string().optional() }),
     });
     const schema = createFlatCommandSchema([cmd1, cmd2]);
-    expect(schema.shape.command).toBeInstanceOf(z.ZodEnum);
+    expect(expectOptional(schema.shape.command)).toBeInstanceOf(z.ZodEnum);
     expect(schema.shape.command!.parse("foo")).toBe("foo");
     expect(schema.shape.command!.parse("bar")).toBe("bar");
     expect(() => schema.shape.command!.parse("baz")).toThrow();
@@ -988,7 +999,7 @@ describe("createFlatCommandSchema", () => {
     });
     const schema = createFlatCommandSchema([cmd]);
     // The bundle selector should be a z.literal("evil"), not z.string
-    expect(schema.shape.command).toBeInstanceOf(z.ZodLiteral);
+    expect(expectOptional(schema.shape.command)).toBeInstanceOf(z.ZodLiteral);
     expect(schema.shape.command!.parse("evil")).toBe("evil");
     expect(() => schema.shape.command!.parse("anything")).toThrow();
     // payload merged normally
@@ -1009,13 +1020,13 @@ describe("createFlatCommandSchema", () => {
     // Should not throw — array schema is skipped
     const schema = createFlatCommandSchema([arraySchema, objSchema]);
     expect(schema.shape).toHaveProperty("id");
-    expect(schema.shape.command).toBeInstanceOf(z.ZodEnum);
+    expect(expectOptional(schema.shape.command)).toBeInstanceOf(z.ZodEnum);
   });
 
   test("command with name but no inputSchema still appears in enum", () => {
     const bare = makeCmd({ name: "noop", summary: "Noop" });
     const schema = createFlatCommandSchema([bare]);
-    expect(schema.shape.command).toBeInstanceOf(z.ZodLiteral);
+    expect(expectOptional(schema.shape.command)).toBeInstanceOf(z.ZodLiteral);
     expect(schema.shape.command!.parse("noop")).toBe("noop");
     // Only the command field exists
     expect(Object.keys(schema.shape)).toEqual(["command"]);
@@ -1025,6 +1036,48 @@ describe("createFlatCommandSchema", () => {
     const schema = createFlatCommandSchema([]);
     expect(schema.parse({ command: "anything" })).toEqual({ command: "anything" });
     expect(schema.parse({ command: "" })).toEqual({ command: "" });
+  });
+
+  test("regression: an empty invocation names no command and produces no warning", () => {
+    const cmd = makeCmd({
+      name: "serve",
+      summary: "Serve",
+      inputSchema: z.object({ port: z.coerce.number().optional() }),
+    });
+    // While `command` was required this failed with `command: Invalid option …`
+    // — an empty invocation carries no selector, so it must validate cleanly.
+    expect(parseCliArgs(createFlatCommandSchema([cmd]), []).warnings).toEqual([]);
+  });
+
+  test("regression: an object parse without a selector succeeds", () => {
+    const cmd = makeCmd({
+      name: "serve",
+      summary: "Serve",
+      inputSchema: z.object({ port: z.coerce.number().optional() }),
+    });
+    expect(createFlatCommandSchema([cmd]).parse({})).toEqual({});
+  });
+
+  test("naming a command outside the bundle still warns", () => {
+    const cmd1 = makeCmd({
+      name: "foo",
+      summary: "Foo",
+      inputSchema: z.object({ x: z.string().optional() }),
+    });
+    const cmd2 = makeCmd({
+      name: "bar",
+      summary: "Bar",
+      inputSchema: z.object({ y: z.string().optional() }),
+    });
+    const flat = createFlatCommandSchema([cmd1, cmd2]);
+    // Optionality must not weaken the enum: naming an unknown command is still
+    // a validation failure.
+    const warnings = parseCliArgs(flat, ["--command", "nope"]).warnings;
+    expect(warnings.some((w) => w.startsWith("command:"))).toBe(true);
+  });
+
+  test("empty bundle: an empty invocation produces no warning", () => {
+    expect(parseCliArgs(createFlatCommandSchema([]), []).warnings).toEqual([]);
   });
 });
 

@@ -749,9 +749,13 @@ export function buildCLICommandValidator(
  *
  * A caller invokes the bundle by naming one command and supplying that
  * command's args — as a positional (`bundle foo --target x`) or as a flag
- * (`bundle --command foo --target x`); `command` is a normal enum field, so
- * both forms parse through {@link parseCliArgs}. The positional form
+ * (`bundle --command foo --target x`); `command` is a normal optional enum
+ * field, so both forms parse through {@link parseCliArgs}. The positional form
  * requires passing `positionalKeys: ["command"]` to `parseCliArgs`.
+ *
+ * `command` is optional because an empty invocation carries no selector; it
+ * must still validate so the consuming aiTool can render help. Naming a
+ * command outside the bundle still fails validation.
  *
  * Because the flattened args span many commands but only the selected
  * command's args apply on any one call, **every merged arg is relaxed to
@@ -765,7 +769,7 @@ export function buildCLICommandValidator(
  *
  * ```ts
  * const SkillSchema = createFlatCommandSchema(registry.all);
- * // → z.object({ command: z.enum(["foo","bar"]), target: z.string().optional() })
+ * // → z.object({ command: z.enum(["foo","bar"]).optional(), target: z.string().optional() })
  * ```
  */
 export function createFlatCommandSchema(
@@ -797,6 +801,10 @@ export function createFlatCommandSchema(
   // cannot shadow the bundle selector.
   return z.object({
     ...args,
-    command: command.describe("Which command in the bundle to run"),
+    // Optional: an empty invocation (or a method call with its own params such
+    // as `--task`) carries no selector, and the consuming aiTool is expected to
+    // render help once validation passes — which it cannot do while a required
+    // selector rejects the call first. Naming a command still validates.
+    command: command.optional().describe("Which command in the bundle to run"),
   });
 }

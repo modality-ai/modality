@@ -6,6 +6,9 @@ export * from "./help";
 // root import renders exactly what the runner does.
 export { getHelp } from "./getHelp";
 export type { GetCliHelpOptions } from "./getHelp";
+// Declare the CLI config once; feed it to both createCliRunner and getHelp.
+export { defineCliConfig } from "./defineCliConfig";
+export type { CliConfig } from "./defineCliConfig";
 
 // Reusable test suite: enforce the one-export-per-command-module rule.
 export { setupCommandExportValidation } from "./command-export-validation";
