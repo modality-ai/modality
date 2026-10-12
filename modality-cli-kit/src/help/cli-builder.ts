@@ -57,7 +57,7 @@ export interface BuildCliFromToolsOptions
    * Each field becomes an `Option` in the global options section.
    * Flags like `--help`, `-h`, `--json` are always included by default.
    */
-  globalOptionsSchema?: z.ZodObject<Record<string, z.ZodTypeAny>>;
+  globalOptionsSchema?: z.ZodObject<Record<string, z.ZodType>>;
   /**
    * Per-field overrides for the global flags derived from
    * `globalOptionsSchema` — the same `KeyOverride` shape a command uses for its
@@ -135,7 +135,7 @@ export function buildCliFromTools(
     let toolPositionals: Option[] = [];
     if (tool.inputSchema instanceof z.ZodObject) {
       toolPositionals = schemaToCliOptions(
-        tool.inputSchema as z.ZodObject<Record<string, z.ZodTypeAny>>,
+        tool.inputSchema as z.ZodObject<Record<string, z.ZodType>>,
         keyMap,
       ).positionals;
     }

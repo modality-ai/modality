@@ -80,7 +80,7 @@ describe("createCliRunner.run", () => {
     expect(code).toBe(7);
   });
 
-  test("empty argv with no onEmpty prints global help and returns 1", async () => {
+  test("empty argv with no onEmpty and no aiTool prints global help and returns 1", async () => {
     const { code, logs } = await runCapturing(baseOpts(), []);
     expect(code).toBe(1);
     expect(logs.join("\n")).toContain("my-cli");
@@ -505,6 +505,13 @@ describe("createCliRunner.run — aiTool dispatch", () => {
     expect(calls).toEqual([{}]);
   });
 
+  test("aiTool empty-argv renders the result when using default render", async () => {
+    const { aiTool } = spyTool("plain string result");
+    const { code, logs } = await runCapturing({ ...baseOpts(), aiTool }, []);
+    expect(code).toBe(0);
+    expect(logs.join("\n")).toContain("plain string result");
+  });
+
   test("an explicit onEmpty still wins over the aiTool default", async () => {
     const { aiTool, calls } = spyTool();
     const { code } = await runCapturing({ ...baseOpts(), aiTool, onEmpty: () => 9 }, []);
@@ -520,13 +527,6 @@ describe("createCliRunner.run — aiTool dispatch", () => {
     expect(code).toBe(0);
   });
 
-  test("aiTool empty-argv renders the result when using default render", async () => {
-    const { aiTool } = spyTool("plain string result");
-    const { code, logs } = await runCapturing({ ...baseOpts(), aiTool }, []);
-    expect(code).toBe(0);
-    // The default render should pass the string through directly
-    expect(logs.join("\n")).toContain("plain string result");
-  });
 });
 
 describe("createCliRunner.getHelp", () => {

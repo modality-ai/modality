@@ -25,14 +25,14 @@ describe("inferOptionType", () => {
     const opt: Option = { flag: "--json", desc: "JSON output" };
     const type = inferOptionType(opt);
     expect(type instanceof z.ZodOptional).toBe(true);
-    expect((type as z.ZodOptional<z.ZodTypeAny>).unwrap() instanceof z.ZodBoolean).toBe(true);
+    expect((type as z.ZodOptional<z.ZodType>).unwrap() instanceof z.ZodBoolean).toBe(true);
   });
 
   test("optional string for options with arg", () => {
     const opt: Option = { flag: "--config", arg: "<file>", desc: "Config file" };
     const type = inferOptionType(opt);
     expect(type instanceof z.ZodOptional).toBe(true);
-    expect((type as z.ZodOptional<z.ZodTypeAny>).unwrap() instanceof z.ZodString).toBe(true);
+    expect((type as z.ZodOptional<z.ZodType>).unwrap() instanceof z.ZodString).toBe(true);
   });
 
   test("boolean with default true for --no- prefix", () => {
@@ -43,7 +43,7 @@ describe("inferOptionType", () => {
 
   test("coerced number for type: number", () => {
     const opt: Option = { flag: "--count", arg: "<N>", desc: "Count", type: "number" };
-    const type = inferOptionType(opt) as z.ZodOptional<z.ZodTypeAny>;
+    const type = inferOptionType(opt) as z.ZodOptional<z.ZodType>;
     expect(type instanceof z.ZodOptional).toBe(true);
     expect(type.unwrap().safeParse("42").success).toBe(true);
     expect(type.unwrap().parse("42")).toBe(42);
@@ -53,7 +53,7 @@ describe("inferOptionType", () => {
     const opt: Option = {
       flag: "--mode", arg: "<M>", desc: "Mode", type: "enum", enumValues: ["fast", "slow"],
     };
-    const type = inferOptionType(opt) as z.ZodOptional<z.ZodTypeAny>;
+    const type = inferOptionType(opt) as z.ZodOptional<z.ZodType>;
     expect(type.unwrap().safeParse("fast").success).toBe(true);
     expect(type.unwrap().safeParse("nope").success).toBe(false);
   });
@@ -69,7 +69,7 @@ describe("inferOptionType", () => {
     const opt: Option = {
       flag: "--only", arg: "<v>", desc: "Only", type: "enum", enumValues: ["x"],
     };
-    const type = inferOptionType(opt) as z.ZodOptional<z.ZodTypeAny>;
+    const type = inferOptionType(opt) as z.ZodOptional<z.ZodType>;
     expect(type.unwrap().safeParse("x").success).toBe(true);
     expect(type.unwrap().safeParse("y").success).toBe(false);
   });
@@ -78,7 +78,7 @@ describe("inferOptionType", () => {
     const opt: Option = {
       flag: "--mode", arg: "<M>", desc: "Mode", type: "enum", enumValues: [],
     };
-    const type = inferOptionType(opt) as z.ZodOptional<z.ZodTypeAny>;
+    const type = inferOptionType(opt) as z.ZodOptional<z.ZodType>;
     expect(type.unwrap() instanceof z.ZodString).toBe(true);
     expect(type.unwrap().safeParse("anything").success).toBe(true);
   });
@@ -858,7 +858,7 @@ describe("createFlatCommandSchema", () => {
       inputSchema: z.object({ name: z.string() }), // required in its own schema
     });
     const schema = createFlatCommandSchema([cmd]);
-    const nameField = schema.shape.name as z.ZodTypeAny;
+    const nameField = schema.shape.name as z.ZodType;
     expect(nameField).toBeInstanceOf(z.ZodOptional);
     // Should parse successfully with no name provided
     expect(schema.parse({ command: "required-field" })).toEqual({ command: "required-field" });
@@ -907,7 +907,7 @@ describe("createFlatCommandSchema", () => {
       inputSchema: z.object({ shared: z.coerce.number().describe("From B") }),
     });
     const schema = createFlatCommandSchema([cmd1, cmd2]);
-    const sharedField = schema.shape.shared as z.ZodTypeAny;
+    const sharedField = schema.shape.shared as z.ZodType;
     // cmd2's z.coerce.number() should have overwritten cmd1's z.string
     expect(sharedField.safeParse("42").success).toBe(true);
     expect(sharedField.parse("42")).toBe(42);

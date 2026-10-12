@@ -2,6 +2,10 @@
 // Re-export the curated /help barrel so consumers can import from
 // "modality-cli-kit" without needing a /help sub-path.
 export * from "./help";
+// Defaults-aware getHelp: shadows the low-level one re-exported above so the
+// root import renders exactly what the runner does.
+export { getHelp } from "./getHelp";
+export type { GetCliHelpOptions } from "./getHelp";
 
 // Reusable test suite: enforce the one-export-per-command-module rule.
 export { setupCommandExportValidation } from "./command-export-validation";

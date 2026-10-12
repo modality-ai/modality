@@ -87,7 +87,7 @@ function normalizeKey(flag: string): string {
 }
 
 /** A string that parses as JSON of the given kind, checked without rewriting it. */
-function jsonOfKind(kind: "object" | "array"): z.ZodTypeAny {
+function jsonOfKind(kind: "object" | "array"): z.ZodType {
   return z.string(WIRE_VALUE).refine(
     (raw) => {
       try {
@@ -111,7 +111,7 @@ function isPlainObject(value: unknown): boolean {
  * `options` wins over `type`: a parameter listing allowed values is an enum
  * whatever its declared type, which matches how Counter documents them.
  */
-function typeFor(name: string, param: MethodParameter): z.ZodTypeAny {
+function typeFor(name: string, param: MethodParameter): z.ZodType {
   const options = param.options;
   if (options !== undefined && options.length > 0) {
     return z.enum(options.map(String) as [string, ...string[]]);
@@ -154,8 +154,8 @@ function typeFor(name: string, param: MethodParameter): z.ZodTypeAny {
  */
 export function buildMethodParamsSchema(
   parameters: MethodParameters | undefined,
-): z.ZodObject<Record<string, z.ZodTypeAny>> {
-  const shape: Record<string, z.ZodTypeAny> = {};
+): z.ZodObject<Record<string, z.ZodType>> {
+  const shape: Record<string, z.ZodType> = {};
 
   for (const [name, param] of Object.entries(parameters ?? {})) {
     const type = typeFor(name, param);

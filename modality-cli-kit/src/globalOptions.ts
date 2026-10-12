@@ -19,7 +19,7 @@ const DEFAULT_GLOBAL_OPTIONS = {
   human: z.boolean().optional().describe("render human output instead of JSON"),
   "no-cache": z.boolean().optional().describe("bypass caches; force a live fetch"),
   trace: z.boolean().optional().describe("print the runner's dispatch path to stderr"),
-} satisfies Record<string, z.ZodTypeAny>;
+} satisfies Record<string, z.ZodType>;
 
 /** Name of a global option the runner supplies by default. */
 export type GlobalOptionName = keyof typeof DEFAULT_GLOBAL_OPTIONS;
@@ -35,9 +35,9 @@ export type GlobalOptionName = keyof typeof DEFAULT_GLOBAL_OPTIONS;
  * @param disabled `true` to take none of the defaults, or the names to leave out.
  */
 export function resolveGlobalOptions(
-  supplied: z.ZodObject<Record<string, z.ZodTypeAny>> | undefined,
+  supplied: z.ZodObject<Record<string, z.ZodType>> | undefined,
   disabled: boolean | GlobalOptionName[] | undefined,
-): z.ZodObject<Record<string, z.ZodTypeAny>> {
+): z.ZodObject<Record<string, z.ZodType>> {
   const suppliedShape = supplied?.shape ?? {};
   if (disabled === true) return z.object(suppliedShape);
 

@@ -29,22 +29,21 @@
 import type { AITool } from "modality-mcp-kit";
 import type { z } from "zod";
 import { createTracer, type Tracer } from "./trace";
-import { buildCliFromTools } from "./help/cli-builder";
 import type { CLICommand, KeyOverride } from "./help/types";
 import { validateCLICommandArgs } from "./help/zod-cli";
-import { resolveGlobalOptions, type GlobalOptionName } from "./globalOptions";
+import type { GlobalOptionName } from "./globalOptions";
+import { FORMAT_FLAG, resolveRunnerCli } from "./resolveRunnerCli";
 import {
   formatHuman,
   formatJSON,
   formatJSONL,
-  outputFormatEnvNames,
   resolveOutputFormatFromEnv,
   type CLIResult,
   type OutputFormat,
 } from "./output";
-import { createCommandRegistry, type CommandRegistry } from "./registry";
-import { defaultCommandsFor, type DefaultCommandName } from "./defaultCommands";
-import { markRawArgv, takesRawArgv } from "./defaultCommands/internal";
+import type { CommandRegistry } from "./registry";
+import type { DefaultCommandName } from "./defaultCommands";
+import { takesRawArgv } from "./defaultCommands/internal";
 
 /** Options for {@link createCliRunner}. */
 export interface CliRunnerOptions {
@@ -77,7 +76,7 @@ export interface CliRunnerOptions {
    * A key that collides with a default overrides it, so rewording a default
    * needs no opt-out.
    */
-  globalOptionsSchema?: z.ZodObject<Record<string, z.ZodTypeAny>>;
+  globalOptionsSchema?: z.ZodObject<Record<string, z.ZodType>>;
   /**
    * Per-field overrides for the global flags derived from
    * {@link CliRunnerOptions.globalOptionsSchema}. Without it a value
@@ -162,37 +161,12 @@ function detectFormat(flags: string[]): OutputFormat {
 }
 
 /**
- * The flag that selects each format.
- *
- * `human` is the flagless default for most CLIs, but a CLI whose handlers
- * default to machine output (and opt into rendering with `--human`) can declare
- * `human` in its `globalOptionsSchema` — then the environment can drive it just
- * like the other two. Absence still means human whenever it is not declared.
- */
-const FORMAT_FLAG: Record<OutputFormat, string> = {
-  json: "json",
-  jsonl: "jsonl",
-  human: "human",
-};
-
-/**
  * Is `--human` this CLI's format flag, or a per-command flag that happens to
  * share the name? Only a globally declared `human` participates in format
  * selection; otherwise a command's own `--human` would hijack the renderer.
  */
 function humanIsFormatFlag(globalFlags: Set<string>): boolean {
   return globalFlags.has(FORMAT_FLAG.human);
-}
-
-/**
- * The format flags to name in the help footer — whichever of them this CLI
- * kept. A CLI that dropped them all gets no promise it cannot honor.
- */
-function formatFlagsFooter(globalOptions: z.ZodObject<Record<string, z.ZodTypeAny>>): string {
-  const present = Object.values(FORMAT_FLAG)
-    .filter((flag) => flag in globalOptions.shape)
-    .map((flag) => `--${flag}`);
-  return present.length > 0 ? present.join(" or ") : "no format flag";
 }
 
 /**
@@ -210,7 +184,7 @@ function formatFlagsFooter(globalOptions: z.ZodObject<Record<string, z.ZodTypeAn
 function applyEnvFormat(
   argv: string[],
   envFormat: OutputFormat | undefined,
-  globalFlags: Set<string>,
+  globalFlags: Set<string>
 ): string[] {
   if (!envFormat || argv.length === 0) return argv;
   // A `--json` past the `--` terminator is a positional, not an explicit flag.
@@ -301,54 +275,10 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     methodsDir,
   } = options;
 
-  // Fold in the defaults here rather than in the consuming package, so
-  // `globalOptionsSchema` stays that package's own declaration of what it adds.
-  const globalOptionsSchema = resolveGlobalOptions(suppliedGlobalOptions, withoutDefaultGlobalOption);
-
-  // Append the default commands here rather than in the consuming package, so
-  // `registry` stays that package's own declaration of what it owns.
-  const defaults = defaultCommandsFor(cliName, suppliedRegistry, withoutDefaultCommand, methodsDir);
+  // Help-ready config (default options, default commands, footer) is shared
+  // with the root `getHelp`, so both render identically.
+  const { cli, registry, defaults, globalOptionsSchema } = resolveRunnerCli(options);
   const defaultNames = new Set(defaults.map((cmd) => cmd.name!));
-  const registry = defaults.length
-    ? createCommandRegistry([...suppliedRegistry.all, ...defaults], suppliedRegistry.aliases)
-    : suppliedRegistry;
-
-  // `createCommandRegistry` normalizes every command into a fresh object, so
-  // the raw-argv grant — which is held by object identity — does not survive
-  // registration. Re-apply it to the objects the registry will actually
-  // dispatch. This stays inside the kit: `markRawArgv` is not exported from
-  // the package, so only a command the kit authored can be re-marked here.
-  for (const command of defaults) {
-    if (!takesRawArgv(command)) continue;
-    const registered = registry.get(command.name!);
-    if (registered) markRawArgv(registered);
-  }
-
-  // `buildCliFromTools` reads aliases off each command object, so project them
-  // from the registry's alias map — keeping the registry the one source.
-  const cli = buildCliFromTools(
-    registry.all.map((cmd) => ({
-      ...cmd,
-      aliases: registry.aliases[cmd.name ?? ""] ?? [],
-    })),
-    {
-      cliName,
-      tagline,
-      skipFields,
-      globalOptionsSchema,
-      globalOptionsKeyMap,
-      globalExamples,
-      // The env default is invisible in the flag list, so name it where the
-      // reader is already looking for global output control. Only name the
-      // flags this CLI actually has — `withoutDefaultGlobalOption` can remove them.
-      footer:
-        suppliedFooter ??
-        [
-          `Run \`${cliName} <command> --help\` for more information about a command.`,
-          `Output format: pass ${formatFlagsFooter(globalOptionsSchema)}, or set ${outputFormatEnvNames(cliName).join(" / ")} (human | json | jsonl). A flag beats the environment.`,
-        ].join("\n"),
-    },
-  );
 
   // Only flags the CLI declares globally can be injected from the environment;
   // feed the same list into per-command validation so a declared flag is
@@ -384,7 +314,7 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     rest: string[],
     resolvedName: string,
     renderResult: (result: unknown) => void,
-    trace: Tracer,
+    trace: Tracer
   ): Promise<number> {
     const first = rest[0];
     const commandOwnsFlags = first !== undefined && !first.startsWith("-");
@@ -403,9 +333,13 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     // `--human` or `--no-cache` can neither fail the command's param
     // validation nor arrive at Counter as a method parameter. The command's
     // own flags and `--help` are left untouched.
-    const commandArgs = rest.filter((token) => !globalFlagTokens.includes(token));
+    const commandArgs = rest.filter(
+      (token) => !globalFlagTokens.includes(token)
+    );
     trace.step("forwarded args", commandArgs);
-    const result = await (command.execute as (args: string[]) => Promise<unknown>)(commandArgs);
+    const result = await (
+      command.execute as (args: string[]) => Promise<unknown>
+    )(commandArgs);
     renderResult(result);
     return Number(process.exitCode);
   }
@@ -417,8 +351,10 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
   async function dispatch(rawArgv: string[], trace: Tracer): Promise<number> {
     trace.step("argv", rawArgv);
 
-    const envFormat = resolveOutputFormatFromEnv(cliName, process.env, (message) =>
-      console.error(message),
+    const envFormat = resolveOutputFormatFromEnv(
+      cliName,
+      process.env,
+      (message) => console.error(message)
     );
     const argv = applyEnvFormat(rawArgv, envFormat, globalFlags);
     if (envFormat !== undefined) trace.step("env output format", envFormat);
@@ -438,8 +374,14 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
       flags.includes("--json") ||
       flags.includes("--jsonl") ||
       (humanIsFormatFlag(globalFlags) && flags.includes("--human"));
-    const envApplies = envFormat === "human" || (envFormat !== undefined && globalFlags.has(FORMAT_FLAG[envFormat]));
-    const format = hasExplicitFormat ? detectFormat(flags) : (envApplies ? envFormat ?? "human" : "human");
+    const envApplies =
+      envFormat === "human" ||
+      (envFormat !== undefined && globalFlags.has(FORMAT_FLAG[envFormat]));
+    const format = hasExplicitFormat
+      ? detectFormat(flags)
+      : envApplies
+        ? (envFormat ?? "human")
+        : "human";
 
     trace.step("output format", format);
 
@@ -447,10 +389,13 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     const [name, ...rest] = argv;
 
     if (!name) {
-      trace.step("no command", onEmpty ? "onEmpty" : aiTool ? "aiTool.execute({})" : "global help");
+      trace.step(
+        "no command",
+        onEmpty ? "onEmpty" : aiTool ? "aiTool.execute({})" : "global help"
+      );
       if (onEmpty) return onEmpty();
       // With an aiTool but no explicit onEmpty, defer the empty invocation to
-      // the tool (its no-command path is a no-op) instead of printing help.
+      // the tool; its no-command path is expected to return the global help.
       if (aiTool) {
         const result = await aiTool.execute({});
         if (result !== undefined) renderResult(result);
@@ -468,7 +413,11 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
       trace.step("dispatch", "version");
       // The consuming package owns its version, so it comes in through options;
       // say so plainly when it was not supplied rather than inventing one.
-      console.log(version ? `${cliName} v${version}` : `${cliName} (version not configured)`);
+      console.log(
+        version
+          ? `${cliName} v${version}`
+          : `${cliName} (version not configured)`
+      );
       return 0;
     }
 
@@ -482,7 +431,7 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
         "resolution failed",
         resolution.reason === "ambiguous"
           ? `${name} is ambiguous: ${resolution.candidates.join(", ")}`
-          : `${name} is unknown`,
+          : `${name} is unknown`
       );
       if (resolution.reason === "ambiguous") {
         const quoted = resolution.candidates.map((c) => `"${c}"`).join(", ");
@@ -496,14 +445,23 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     // Use the resolved name so help, validation, and dispatch all agree
     // even when the user typed a prefix or alias.
     const { command, name: resolvedName } = resolution;
-    trace.step("resolved command", resolvedName === name ? name : `${name} -> ${resolvedName}`);
+    trace.step(
+      "resolved command",
+      resolvedName === name ? name : `${name} -> ${resolvedName}`
+    );
 
     // A raw-argv command owns its argv, so hand it the tokens the user actually
     // typed — `rawArgv`, not `argv`, since an env-injected `--json` would
     // otherwise arrive as one of its arguments.
     if (takesRawArgv(command)) {
       trace.step("dispatch", "raw argv (kit default command)");
-      return runRawArgs(command, rawArgv.slice(1), resolvedName, renderResult, trace);
+      return runRawArgs(
+        command,
+        rawArgv.slice(1),
+        resolvedName,
+        renderResult,
+        trace
+      );
     }
 
     if (rest.includes("--help") || rest.includes("-h")) {
@@ -514,7 +472,11 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
 
     // Unknown flags, missing required args, and coercion failures all come back
     // as warnings — never throws — so a non-empty list means rejection.
-    const { data, warnings } = validateCLICommandArgs(command, rest, globalFlagTokens);
+    const { data, warnings } = validateCLICommandArgs(
+      command,
+      rest,
+      globalFlagTokens
+    );
     if (warnings.length > 0) {
       trace.step("validation rejected", warnings);
       for (const warning of warnings) console.error(warning);
@@ -541,9 +503,10 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
         ? await aiTool.execute({ ...args, command: resolvedName })
         : await command.execute(args);
     renderResult(result);
-    const succeeded = result && typeof result === "object" && "success" in result
-      ? (result as { success: boolean }).success !== false
-      : true;
+    const succeeded =
+      result && typeof result === "object" && "success" in result
+        ? (result as { success: boolean }).success !== false
+        : true;
     return succeeded ? 0 : 1;
   }
 
@@ -564,7 +527,9 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
    * to see. Exit code 1, the same as a validation rejection — from the
    * caller's side a refused run is a refused run.
    */
-  async function run(rawArgv: string[] = process.argv.slice(2)): Promise<number> {
+  async function run(
+    rawArgv: string[] = process.argv.slice(2)
+  ): Promise<number> {
     // Built from the raw tokens, before anything is resolved or injected — the
     // tracer has to be live for the first step it reports, and for the catch
     // below. Only pre-terminator tokens count, so a positional `--trace` after
@@ -573,7 +538,7 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     // the runner's to act on — the same rule the other global flags follow.
     const trace = createTracer(
       globalFlags.has("trace") && flagTokens(rawArgv).includes("--trace"),
-      cliName,
+      cliName
     );
 
     try {

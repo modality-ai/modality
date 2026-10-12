@@ -61,7 +61,7 @@ export interface KeyOverride {
  * flags still apply); sub-command style entries can be listed via
  * `positionals` or custom `usage` lines.
  */
-export interface CLICommand extends AITool<any, z.ZodTypeAny> {
+export interface CLICommand extends AITool<any, z.ZodType> {
   /** One-line summary shown in the command index (falls back to `description`). */
   summary?: string;
   /** Ordered positional arguments (displayed in help, validated in args). */

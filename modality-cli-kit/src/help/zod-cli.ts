@@ -40,12 +40,12 @@ import { fuzzySuggestion, DEFAULT_GLOBAL_FLAGS } from "./validator";
  *   .transform(v => v === true ? "auto" : v)` is still a bare-capable flag
  *   (`--pin` alone parses as true, then the transform maps it to "auto").
  */
-function unwrapSchema(schema: z.ZodTypeAny): z.ZodTypeAny | null {
-  const unwrap = (schema as { unwrap?: () => z.ZodTypeAny }).unwrap;
+function unwrapSchema(schema: z.ZodType): z.ZodType | null {
+  const unwrap = (schema as { unwrap?: () => z.ZodType }).unwrap;
   if (typeof unwrap === "function") return unwrap.call(schema);
 
   if (schema instanceof z.ZodPipe) {
-    return schema.in as z.ZodTypeAny;
+    return schema.in as z.ZodType;
   }
 
   return null;
@@ -55,7 +55,7 @@ function unwrapSchema(schema: z.ZodTypeAny): z.ZodTypeAny | null {
  * Check if a Zod schema is ultimately a boolean type, unwrapping
  * Optional, Default, and Nullable wrappers via {@link unwrapSchema}.
  */
-function isBooleanSchema(schema: z.ZodTypeAny): boolean {
+function isBooleanSchema(schema: z.ZodType): boolean {
   if (schema instanceof z.ZodBoolean) return true;
 
   const inner = unwrapSchema(schema);
@@ -86,10 +86,10 @@ function looksLikeFlag(token: string): boolean {
  * bare form valid (`--pin` alone → true) while a value reaches the string
  * member (`--pin 44460:short`).
  */
-function acceptsBooleanSchema(schema: z.ZodTypeAny): boolean {
+function acceptsBooleanSchema(schema: z.ZodType): boolean {
   if (schema instanceof z.ZodBoolean) return true;
   if (schema instanceof z.ZodUnion) {
-    return (schema.options as z.ZodTypeAny[]).some(acceptsBooleanSchema);
+    return (schema.options as z.ZodType[]).some(acceptsBooleanSchema);
   }
 
   const inner = unwrapSchema(schema);
@@ -166,10 +166,10 @@ export function optionalValueFlag(whenBare: string, whenOff = "") {
  * - Options with `type: "enum"` → `z.enum(enumValues!)`
  * - Options with `required: true` → no `.optional()` wrapper
  */
-export function inferOptionType(option: Option): z.ZodTypeAny {
+export function inferOptionType(option: Option): z.ZodType {
   if (option.flag.startsWith("--no-")) return z.boolean().default(true);
 
-  const build = (): z.ZodTypeAny => {
+  const build = (): z.ZodType => {
     switch (option.type) {
       case "number":
         return z.coerce.number();
@@ -291,7 +291,7 @@ export function parseCliArgs<T extends z.ZodRawShape>(
 
     // Determine if the schema expects a boolean — or accepts a bare flag via a
     // boolean union member (e.g. z.union([z.boolean(), z.string()])).
-    const fieldSchema = schema.shape[key]! as z.ZodTypeAny;
+    const fieldSchema = schema.shape[key]! as z.ZodType;
     const isBoolean = isBooleanSchema(fieldSchema);
 
     // Consume the next token as this flag's value, but only when it is not
@@ -413,9 +413,9 @@ interface FieldAnalysis {
  * In Zod 4, `.describe()` sets the description on the outermost wrapper,
  * so `description` is captured from the original field before unwrapping.
  */
-function analyzeZodField(field: z.ZodTypeAny): FieldAnalysis {
+function analyzeZodField(field: z.ZodType): FieldAnalysis {
   let isOptional = false;
-  let current: z.ZodTypeAny = field;
+  let current: z.ZodType = field;
 
   // Capture description from the outer field (Zod 4 puts it on the wrapper)
   const description = (field as { description?: string }).description;
@@ -423,16 +423,16 @@ function analyzeZodField(field: z.ZodTypeAny): FieldAnalysis {
   while (true) {
     if (current instanceof z.ZodOptional) {
       isOptional = true;
-      current = current.unwrap() as unknown as z.ZodTypeAny;
+      current = current.unwrap() as unknown as z.ZodType;
       continue;
     }
     if (current instanceof z.ZodDefault) {
       isOptional = true; // has default → effectively optional in CLI
-      current = current.unwrap() as unknown as z.ZodTypeAny;
+      current = current.unwrap() as unknown as z.ZodType;
       continue;
     }
     if (current instanceof z.ZodNullable) {
-      current = current.unwrap() as unknown as z.ZodTypeAny;
+      current = current.unwrap() as unknown as z.ZodType;
       continue;
     }
     if (current instanceof z.ZodPipe) {
@@ -440,7 +440,7 @@ function analyzeZodField(field: z.ZodTypeAny): FieldAnalysis {
       // reshapes the output, and the optional/default wrappers sit inside it,
       // so peeling here keeps `isOptional` (and thus help's required flag)
       // honest instead of falling through to the unknown-type fallback.
-      current = current.in as z.ZodTypeAny;
+      current = current.in as z.ZodType;
       continue;
     }
     break;
@@ -494,7 +494,7 @@ function analyzeZodField(field: z.ZodTypeAny): FieldAnalysis {
  * @returns An object with `options` (flag-style) and `positionals` (ordered).
  */
 export function schemaToCliOptions(
-  schema: z.ZodObject<Record<string, z.ZodTypeAny>>,
+  schema: z.ZodObject<Record<string, z.ZodType>>,
   keyMap?: Record<string, KeyOverride>,
 ): { options: Option[]; positionals: Option[] } {
   const options: Option[] = [];
@@ -507,7 +507,7 @@ export function schemaToCliOptions(
     if (override?.hidden) continue;
 
     const { baseType, isOptional, enumValues, description } =
-      analyzeZodField(rawField as z.ZodTypeAny);
+      analyzeZodField(rawField as z.ZodType);
 
     const flag =
       override?.flag ?? (key.length === 1 ? `-${key}` : `--${toFlagName(key)}`);
@@ -598,10 +598,10 @@ export function buildKeyMap(
  * Short flags (-h) are skipped since they're aliases handled elsewhere.
  */
 function mergeDefaultFlags(
-  schema: z.ZodObject<Record<string, z.ZodTypeAny>>,
+  schema: z.ZodObject<Record<string, z.ZodType>>,
   extraFlags?: string[],
-): z.ZodObject<Record<string, z.ZodTypeAny>> {
-  const extra: Record<string, z.ZodTypeAny> = {};
+): z.ZodObject<Record<string, z.ZodType>> {
+  const extra: Record<string, z.ZodType> = {};
   const flags = [...DEFAULT_GLOBAL_FLAGS, ...(extraFlags ?? [])];
 
   for (const flag of flags) {
@@ -634,11 +634,11 @@ function mergeDefaultFlags(
  * refinements included.
  */
 export function normalizeSchemaKeys(
-  schema: z.ZodObject<Record<string, z.ZodTypeAny>>,
+  schema: z.ZodObject<Record<string, z.ZodType>>,
   keyMap?: Record<string, KeyOverride>,
-): z.ZodObject<Record<string, z.ZodTypeAny>> {
+): z.ZodObject<Record<string, z.ZodType>> {
   const shape = schema.shape;
-  const normalized: Record<string, z.ZodTypeAny> = {};
+  const normalized: Record<string, z.ZodType> = {};
   let changed = false;
   let removed = false;
   for (const [key, field] of Object.entries(shape)) {
@@ -682,7 +682,7 @@ export function validateCLICommandArgs(
   const positionalKeys = positionals.length > 0
     ? positionals.map((pos) => pos.flag)
     : (command?.positionalKeys ?? []).map(toKebab);
-  let schema: z.ZodObject<Record<string, z.ZodTypeAny>>;
+  let schema: z.ZodObject<Record<string, z.ZodType>>;
 
   // Use inputSchema directly for validation when available (bypasses a lossy
   // Option[]→schema reconstruction, preserving refinements and
@@ -691,14 +691,14 @@ export function validateCLICommandArgs(
   // keyMap) are excluded so they don't cause false validation failures.
   if (command?.inputSchema instanceof z.ZodObject) {
     schema = normalizeSchemaKeys(
-      command.inputSchema as z.ZodObject<Record<string, z.ZodTypeAny>>,
+      command.inputSchema as z.ZodObject<Record<string, z.ZodType>>,
       command.keyMap,
     );
   } else {
     // No schema → only positionals are recognized. Positionals always carry a
     // value, so default to a string when no explicit `type` is given (the
     // boolean-flag default only makes sense for options).
-    const posShape: Record<string, z.ZodTypeAny> = {};
+    const posShape: Record<string, z.ZodType> = {};
     for (const pos of positionals) {
       posShape[pos.flag] = inferOptionType({
         ...pos,
@@ -770,16 +770,16 @@ export function buildCLICommandValidator(
  */
 export function createFlatCommandSchema(
   commands: CLICommand[],
-): z.ZodObject<Record<string, z.ZodTypeAny>> {
+): z.ZodObject<Record<string, z.ZodType>> {
   const names = commands
     .map((cmd) => cmd.name)
     .filter((name): name is string => !!name);
 
-  const args: Record<string, z.ZodTypeAny> = {};
+  const args: Record<string, z.ZodType> = {};
   for (const cmd of commands) {
     if (!(cmd.inputSchema instanceof z.ZodObject)) continue;
     for (const [key, field] of Object.entries(cmd.inputSchema.shape)) {
-      const f = field as z.ZodTypeAny;
+      const f = field as z.ZodType;
       // Avoid double-wrapping: only wrap if not already optional.
       args[key] = f instanceof z.ZodOptional ? f : f.optional();
     }

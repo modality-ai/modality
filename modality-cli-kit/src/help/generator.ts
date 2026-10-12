@@ -28,7 +28,7 @@ function cliSurface(cmd: CLICommand): { options: Option[]; positionals: Option[]
   }
 
   const derived = schemaToCliOptions(
-    cmd.inputSchema as z.ZodObject<Record<string, z.ZodTypeAny>>,
+    cmd.inputSchema as z.ZodObject<Record<string, z.ZodType>>,
     buildKeyMap(cmd.positionalKeys, cmd.keyMap),
   );
   return {

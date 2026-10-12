@@ -32,7 +32,7 @@ const JSONL_GLOBAL_OPTIONS = z.object({
  * take a default away.
  */
 const makeRunner = (
-  globalOptionsSchema?: z.ZodObject<Record<string, z.ZodTypeAny>>,
+  globalOptionsSchema?: z.ZodObject<Record<string, z.ZodType>>,
   withoutDefaultGlobalOption?: boolean | GlobalOptionName[],
 ) =>
   createCliRunner({
