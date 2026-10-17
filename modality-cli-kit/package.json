@@ -1,5 +1,5 @@
 {
-  "version": "0.13.1",
+  "version": "0.14.0",
   "name": "modality-cli-kit",
   "repository": {
     "type": "git",
@@ -11,12 +11,14 @@
   "author": "Hill <hill@kimo.com>",
   "license": "ISC",
   "git.addAICoAuthor": "off",
+  "peerDependencies": {
+    "zod": "^4.6.7"
+  },
   "dependencies": {
-    "modality-mcp-kit": "^2.1.0",
-    "zod": "^4.6.6"
+    "modality-mcp-kit": "^2.1.0"
   },
   "optionalDependencies": {
-    "@modality-counter/core": "^2.5.3"
+    "@modality-counter/core": "^2.6.0"
   },
   "devDependencies": {
     "modality-bun-kit": "^1.4.2"
