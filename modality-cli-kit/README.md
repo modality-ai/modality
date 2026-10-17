@@ -273,6 +273,8 @@ A command the map does not name keeps its own list, and an empty array (`{ bar: 
 
 ## Default Commands (`src/defaultCommands/`)
 
+https://github.com/modality-ai/modality/tree/main/modality-cli-kit/src/defaultCommands/commands
+
 Commands `createCliRunner` registers on your CLI's behalf. You declare nothing — they show up in `--help` and dispatch like any other command.
 
 Adding one is a change to that folder alone: drop the module in beside `merge.ts` and add its factory to `DEFAULT_COMMANDS`. The `DefaultCommandName` union widens automatically, so `withoutDefaultCommand` accepts the new name with no further wiring.
