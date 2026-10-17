@@ -325,5 +325,5 @@ createMergeCommand({ cliName: "my-cli" });    // the CLICommand, to register man
 
 ## Repository
 
-- **Git**: https://github.com/react-atomic/modality
+- **Git**: https://github.com/modality-ai/modality/tree/main/modality-cli-kit 
 - **NPM**: https://www.npmjs.com/package/modality-cli-kit
