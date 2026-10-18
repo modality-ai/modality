@@ -812,10 +812,8 @@ export function createFlatCommandSchema(
 /**
  * Context Counter hands to a method script.
  *
- * It arrives as the **third** argument of Counter's `counterScript(methodParams,
- * result, context)` — not as the second argument of `AITool.execute(args,
- * context?)`, which is how `modality-mcp-kit` types a tool's entry point.
- * Mistaking the two makes a script read the result tuple as its context.
+ * It arrives merged into the single props argument as `props._ctx`, i.e.
+ * Counter calls `counterScript({ ...methodParams, _ctx: context })`.
  *
  * Structurally mirrors Counter's exported `CounterScriptContext`. It is
  * re-declared rather than imported because `@modality-counter/core` is an
@@ -832,15 +830,14 @@ export interface AiToolContext {
 /**
  * Split an aiTool call into its `command` and the remaining args: the `command`
  * selector in props when the bundle was called directly, otherwise the bare
- * command name Counter hands over in its context. Use as
- * `const { command, ...args } = resolveAiToolCommand(props, ctx)`.
+ * command name Counter hands over in `props._ctx`. `_ctx` is stripped from the
+ * returned args. Use as `const { command, ...args } = resolveAiToolCommand(props)`.
  */
-export function resolveAiToolCommand<T extends { command?: unknown }>(
-  props: T,
-  context?: AiToolContext,
-): Omit<T, "command"> & { command?: string } {
-  const { command: selected, ...args } = props;
-  const command = selected ?? context?.command;
+export function resolveAiToolCommand<
+  T extends { command?: unknown; _ctx?: AiToolContext },
+>(props: T): Omit<T, "command" | "_ctx"> & { command?: string } {
+  const { command: selected, _ctx, ...args } = props;
+  const command = selected ?? _ctx?.command;
   return {
     ...args,
     command: command === undefined || command === null ? undefined : String(command),

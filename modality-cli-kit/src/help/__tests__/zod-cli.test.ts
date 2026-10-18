@@ -1089,14 +1089,19 @@ describe("resolveAiToolCommand", () => {
     expect(args).toEqual({ target: "x" });
   });
 
-  test("falls back to the command Counter passes in its context", () => {
-    const { command, ...args } = resolveAiToolCommand({}, { method: "m", command: "skill" });
+  test("falls back to the command Counter passes in props._ctx and strips _ctx", () => {
+    const { command, ...args } = resolveAiToolCommand({
+      _ctx: { method: "m", command: "skill" },
+    });
     expect(command).toBe("skill");
     expect(args).toEqual({});
   });
 
-  test("props win over context", () => {
-    const { command } = resolveAiToolCommand({ command: "foo" }, { method: "m", command: "skill" });
+  test("props.command wins over _ctx", () => {
+    const { command } = resolveAiToolCommand({
+      command: "foo",
+      _ctx: { method: "m", command: "skill" },
+    });
     expect(command).toBe("foo");
   });
 
@@ -1107,7 +1112,7 @@ describe("resolveAiToolCommand", () => {
   test("an explicit null selector falls through to the context command", () => {
     // A JSON payload routinely carries `"command": null`. `??` treats it as
     // absent, so Counter's context command still applies.
-    const { command } = resolveAiToolCommand({ command: null }, { method: "m", command: "skill" });
+    const { command } = resolveAiToolCommand({ command: null, _ctx: { method: "m", command: "skill" } });
     expect(command).toBe("skill");
   });
 
@@ -1120,13 +1125,13 @@ describe("resolveAiToolCommand", () => {
   test("an empty selector wins over the context command", () => {
     // `""` is not nullish — an explicitly empty selector must not silently
     // inherit the context command.
-    const { command } = resolveAiToolCommand({ command: "" }, { method: "m", command: "skill" });
+    const { command } = resolveAiToolCommand({ command: "", _ctx: { method: "m", command: "skill" } });
     expect(command).toBe("");
   });
 
   test("a context without a command yields undefined, not the string", () => {
     // The final guard exists so `String(undefined)` never becomes "undefined".
-    expect(resolveAiToolCommand({}, { method: "m" }).command).toBeUndefined();
+    expect(resolveAiToolCommand({ _ctx: { method: "m" } }).command).toBeUndefined();
   });
 });
 

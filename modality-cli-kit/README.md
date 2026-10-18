@@ -166,14 +166,15 @@ console.log(error("✗ failed")); // red
 
 ## Resolving the Command in an aiTool
 
-When Counter runs a method script (e.g. the kit's `skill` default command), it calls the script as `counterScript(methodParams, result, context)`, and the props carry no `command` selector. **Mind the argument order:** `modality-mcp-kit` types `AITool.execute(args, context?)`, where the context is *second* — a script typed against that signature reads the result tuple as its context:
+When Counter runs a method script (e.g. the kit's `skill` default command), it calls the script as `counterScript({ ...methodParams, _ctx: context })`, and the props carry no `command` selector. The context arrives merged into the single props argument as `_ctx`, and `resolveAiToolCommand` strips it from the returned args:
 
 ```ts
 import { resolveAiToolCommand, type AiToolContext } from "modality-cli-kit";
 
-// `ctx` is Counter's THIRD argument, not mcp-kit's second.
-async execute(props: SkillProps, _result?: unknown, ctx?: AiToolContext) {
-  const { command, ...args } = resolveAiToolCommand(props, ctx);
+type SkillProps = z.infer<typeof SkillSchema> & { _ctx?: AiToolContext };
+
+async execute(props: SkillProps) {
+  const { command, ...args } = resolveAiToolCommand(props);
   if (!command) return cli.getHelp();
   if (!registry.get(command)) return undefined; // kit default such as `skill`
   return registry.execute(command, args);
