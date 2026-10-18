@@ -29,7 +29,7 @@
 import { z } from "zod";
 import type { CLICommand } from "../../help/types";
 import { mergeJsonDocs } from "../lib/jsonDocs";
-import type { CLIResult } from "../../output";
+import type { CLIResult } from "../../ui/output";
 
 /** Read stdin to completion as UTF-8 text. */
 async function readStdin(): Promise<string> {

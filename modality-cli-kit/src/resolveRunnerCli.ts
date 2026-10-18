@@ -7,7 +7,7 @@
 import type { z } from "zod";
 import { buildCliFromTools } from "./help/cli-builder";
 import { resolveGlobalOptions } from "./globalOptions";
-import { outputFormatEnvNames, type OutputFormat } from "./output";
+import { outputFormatEnvNames, type OutputFormat } from "./ui/output";
 import { createCommandRegistry } from "./registry";
 import { defaultCommandsFor } from "./defaultCommands";
 import { markRawArgv, takesRawArgv } from "./defaultCommands/internal";

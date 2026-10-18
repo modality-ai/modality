@@ -125,7 +125,7 @@ export {
   formatJSONL,
   formatJSONLItems,
   createOutput,
-} from "./output";
+} from "./ui/output";
 export type {
   OutputFormat,
   CLIResult,
@@ -133,7 +133,7 @@ export type {
   ResultMeta,
   OutputWriter,
   OutputOptions,
-} from "./output";
+} from "./ui/output";
 
 // ── Terminal UI ─────────────────────────────────────────────────────────────
 // Width-aware text rendering (tables, boxes, wrapping) and the escape/timer
