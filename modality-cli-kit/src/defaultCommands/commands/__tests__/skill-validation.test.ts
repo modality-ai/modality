@@ -39,6 +39,8 @@ const counter = {
   throwOnRead: undefined as Error | undefined,
   /** Every argv array handed to `toCounterCLI`, in order. */
   cliCalls: [] as string[][],
+  /** The options object handed to `toCounterCLI`, parallel to `cliCalls`. */
+  cliOptions: [] as unknown[],
 };
 
 const counterMock = () => ({
@@ -47,8 +49,9 @@ const counterMock = () => ({
     if (counter.throwOnRead) throw counter.throwOnRead;
     return counter.yaml;
   },
-  toCounterCLI: () => async (args: string[]) => {
+  toCounterCLI: (_baseDir: string, options?: unknown) => async (args: string[]) => {
     counter.cliCalls.push(args);
+    counter.cliOptions.push(options);
     return { success: true };
   },
   toCounterCLIHelp: () => async () => false,
@@ -160,6 +163,7 @@ describe("skill command with @modality-counter/core mocked", () => {
     counter.yaml = structuredClone(DEFAULT_YAML);
     counter.throwOnRead = undefined;
     counter.cliCalls = [];
+    counter.cliOptions = [];
 
     // Package specifier, so `callerDir` matters little — it anchors the
     // node_modules lookup for the original-import attempt, which fails here
@@ -276,6 +280,16 @@ describe("skill command with @modality-counter/core mocked", () => {
       const { errs } = await executeCapturing(["create-trade-plan", "--reference", "abc"]);
       expect(process.exitCode).toBe(1);
       expect(errs.join("\n")).toContain("--reference — expected a number");
+    });
+  });
+
+  describe("skill → Counter call contract", () => {
+    test("hands Counter the cli name and bare command, not a display string", async () => {
+      // `toCounterCLI` takes an options object; a caller that builds a
+      // `${cliName} ${name}` string makes Counter render a help header it never
+      // matches, and `command` must be the bare name Counter's context reports.
+      await executeCapturing(["create-trade-plan"]);
+      expect(counter.cliOptions).toEqual([{ cliName: "demo", command: "skill" }]);
     });
   });
 

@@ -13,6 +13,7 @@ import {
   normalizeSchemaKeys,
   buildKeyMap,
   createFlatCommandSchema,
+  resolveAiToolCommand,
 } from "../zod-cli";
 import type { Option, CLICommand } from "../types";
 import { makeCmd } from "./helpers";
@@ -1081,6 +1082,54 @@ describe("createFlatCommandSchema", () => {
   });
 });
 
+describe("resolveAiToolCommand", () => {
+  test("keeps the command selector from props and returns the remaining args", () => {
+    const { command, ...args } = resolveAiToolCommand({ command: "foo", target: "x" });
+    expect(command).toBe("foo");
+    expect(args).toEqual({ target: "x" });
+  });
+
+  test("falls back to the command Counter passes in its context", () => {
+    const { command, ...args } = resolveAiToolCommand({}, { method: "m", command: "skill" });
+    expect(command).toBe("skill");
+    expect(args).toEqual({});
+  });
+
+  test("props win over context", () => {
+    const { command } = resolveAiToolCommand({ command: "foo" }, { method: "m", command: "skill" });
+    expect(command).toBe("foo");
+  });
+
+  test("command is undefined when neither supplies one", () => {
+    expect(resolveAiToolCommand({}).command).toBeUndefined();
+  });
+
+  test("an explicit null selector falls through to the context command", () => {
+    // A JSON payload routinely carries `"command": null`. `??` treats it as
+    // absent, so Counter's context command still applies.
+    const { command } = resolveAiToolCommand({ command: null }, { method: "m", command: "skill" });
+    expect(command).toBe("skill");
+  });
+
+  test("a non-string selector is stringified", () => {
+    // The return type promises `string`; an unquoted selector must not leak
+    // through as its original type.
+    expect(resolveAiToolCommand({ command: 7 }).command).toBe("7");
+  });
+
+  test("an empty selector wins over the context command", () => {
+    // `""` is not nullish — an explicitly empty selector must not silently
+    // inherit the context command.
+    const { command } = resolveAiToolCommand({ command: "" }, { method: "m", command: "skill" });
+    expect(command).toBe("");
+  });
+
+  test("a context without a command yields undefined, not the string", () => {
+    // The final guard exists so `String(undefined)` never becomes "undefined".
+    expect(resolveAiToolCommand({}, { method: "m" }).command).toBeUndefined();
+  });
+});
+
 describe("union boolean|string flags", () => {
   // z.union([z.boolean(), z.string()]) — a flag that can be used bare
   // (`--pin` → true, the boolean member) or with a value
@@ -1359,5 +1408,9 @@ describe("public barrel exports (help/index)", () => {
   test("re-exports the bare-capable flag helpers from the source", () => {
     expect(helpIndex.autoDefault).toBe(autoDefault);
     expect(helpIndex.optionalValueFlag).toBe(optionalValueFlag);
+  });
+
+  test("re-exports resolveAiToolCommand from the source", () => {
+    expect(helpIndex.resolveAiToolCommand).toBe(resolveAiToolCommand);
   });
 });

@@ -808,3 +808,41 @@ export function createFlatCommandSchema(
     command: command.optional().describe("Which command in the bundle to run"),
   });
 }
+
+/**
+ * Context Counter hands to a method script.
+ *
+ * It arrives as the **third** argument of Counter's `counterScript(methodParams,
+ * result, context)` — not as the second argument of `AITool.execute(args,
+ * context?)`, which is how `modality-mcp-kit` types a tool's entry point.
+ * Mistaking the two makes a script read the result tuple as its context.
+ *
+ * Structurally mirrors Counter's exported `CounterScriptContext`. It is
+ * re-declared rather than imported because `@modality-counter/core` is an
+ * optional dependency that this module must type-check without — so a field
+ * Counter adds to that context has to be added here by hand too.
+ */
+export interface AiToolContext {
+  /** Method name exactly as the caller passed it — raw, so a leading `*` and the casing survive. */
+  method: string;
+  /** Bare CLI command name (e.g. `skill`); undefined for MCP tool-call execution. */
+  command?: string;
+}
+
+/**
+ * Split an aiTool call into its `command` and the remaining args: the `command`
+ * selector in props when the bundle was called directly, otherwise the bare
+ * command name Counter hands over in its context. Use as
+ * `const { command, ...args } = resolveAiToolCommand(props, ctx)`.
+ */
+export function resolveAiToolCommand<T extends { command?: unknown }>(
+  props: T,
+  context?: AiToolContext,
+): Omit<T, "command"> & { command?: string } {
+  const { command: selected, ...args } = props;
+  const command = selected ?? context?.command;
+  return {
+    ...args,
+    command: command === undefined || command === null ? undefined : String(command),
+  };
+}

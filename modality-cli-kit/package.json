@@ -1,5 +1,5 @@
 {
-  "version": "0.14.0",
+  "version": "0.15.0",
   "name": "modality-cli-kit",
   "repository": {
     "type": "git",
@@ -18,7 +18,7 @@
     "modality-mcp-kit": "^2.1.0"
   },
   "optionalDependencies": {
-    "@modality-counter/core": "^2.6.0"
+    "@modality-counter/core": "^2.7.0"
   },
   "devDependencies": {
     "modality-bun-kit": "^1.4.2"

@@ -77,7 +77,9 @@ export {
   validateCLICommandArgs,
   buildCLICommandValidator,
   createFlatCommandSchema,
+  resolveAiToolCommand,
 } from "./zod-cli";
+export type { AiToolContext } from "./zod-cli";
 
 // CLI Builder
 export { buildCliFromTools } from "./cli-builder";

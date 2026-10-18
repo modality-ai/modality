@@ -33,7 +33,7 @@ declare module "@modality-counter/core" {
   /** Runner that prints the raw skill text for a Counter method. */
   export function toCounterCLI(
     baseDir: string,
-    commandName?: string,
+    options?: { cliName?: string; command?: string },
   ): (args: string[]) => Promise<void>;
 
   /** One discovered Counter item (a method, persona, …). */

@@ -211,7 +211,7 @@ export function createSkillCommand(options: SkillCommandOptions): CLICommand {
         return;
       }
 
-      const run = () => counter.toCounterCLI(methodsDir, `${cliName} ${name}`)(args);
+      const run = () => counter.toCounterCLI(methodsDir, { cliName, command: name })(args);
 
       // No method named (or a leading flag): Counter prints the method list.
       // There are no params to validate against without a method.
