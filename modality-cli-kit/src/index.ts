@@ -1,9 +1,87 @@
 // ── CLI Help Kit ────────────────────────────────────────────────────────────
-// Re-export the curated /help barrel so consumers can import from
-// "modality-cli-kit" without needing a /help sub-path.
-export * from "./help";
-// Defaults-aware getHelp: shadows the low-level one re-exported above so the
-// root import renders exactly what the runner does.
+// Explicit re-exports, no `export *`. Two reasons: the public surface stays
+// greppable and frozen (a new export in a leaf module can't silently widen this
+// package's API), and no two sources can collide into a silently-dropped name —
+// star-export collisions vanish without an error.
+//
+// Note: `getHelp` is deliberately absent from the help list below. It is
+// re-exported from "./getHelp" instead, which shadows the low-level one, so the
+// root import renders exactly what the runner does. Listing both would be a
+// duplicate-export error.
+
+// Colors
+export {
+  color,
+  setNoColor,
+  cmd,
+  header,
+  opt,
+  arg,
+  example,
+  dim,
+  bold,
+  error,
+  success,
+  note,
+  link,
+} from "./help";
+
+// Help types
+export type {
+  Option,
+  CLICommand,
+  HelpConfig,
+  KeyOverride,
+  HelpFormat,
+  GetHelpOptions,
+} from "./help";
+
+// Generator
+export { renderCLICommand, renderSection } from "./help";
+
+// Formatter
+export {
+  visibleWidth,
+  padVisible,
+  padName,
+  flagPad,
+  wrapText,
+  Lines,
+  DEFAULT_COL_NAME_WIDTH,
+} from "./help";
+
+// Validator
+export {
+  levenshtein,
+  fuzzySuggestion,
+  optionFlags,
+  knownFlags,
+  rejectUnknownFlags,
+  buildFlagRejector,
+  DEFAULT_GLOBAL_FLAGS,
+} from "./help";
+
+// Zod CLI
+export {
+  autoDefault,
+  optionalValueFlag,
+  inferOptionType,
+  schemaToCliOptions,
+  toKebab,
+  toFlagName,
+  parseCliArgs,
+  validateCLICommandArgs,
+  buildCLICommandValidator,
+  createFlatCommandSchema,
+  resolveAiToolCommand,
+} from "./help";
+export type { AiToolContext } from "./help";
+
+// CLI Builder
+export { buildCliFromTools } from "./help";
+export type { BuildCliFromToolsOptions, CliBuildResult } from "./help";
+
+// Defaults-aware getHelp.
 export { getHelp } from "./getHelp";
 export type { GetCliHelpOptions } from "./getHelp";
 // Declare the CLI config once; feed it to both createCliRunner and getHelp.
@@ -39,7 +117,53 @@ export type { GlobalOptionName } from "./globalOptions";
 
 // ── CLI Output Types ────────────────────────────────────────────────────────
 // Shared output format types (JSON, human, JSONL) for CLI commands.
-export * from "./output";
+export {
+  outputFormatEnvNames,
+  resolveOutputFormatFromEnv,
+  formatJSON,
+  formatHuman,
+  formatJSONL,
+  formatJSONLItems,
+  createOutput,
+} from "./output";
+export type {
+  OutputFormat,
+  CLIResult,
+  CLIError,
+  ResultMeta,
+  OutputWriter,
+  OutputOptions,
+} from "./output";
+
+// ── Terminal UI ─────────────────────────────────────────────────────────────
+// Width-aware text rendering (tables, boxes, wrapping) and the escape/timer
+// vocabulary for in-place `--watch` loops. Color helpers live in the help
+// section above, not here.
+// Width measurement
+export { stripAnsi, displayWidth, charWidth } from "./ui";
+// Text layout
+export { pad, wrapToWidth, renderTable, renderBox, sideBySide } from "./ui";
+export type { Align, TableOptions } from "./ui";
+// Watch-loop escape codes and status lines
+export {
+  CURSOR_HOME,
+  HIDE_CURSOR,
+  SHOW_CURSOR,
+  CLEAR_SCREEN,
+  CLEAR_BELOW,
+  SET_TITLE,
+  BELL,
+  termWidth,
+  sleep,
+  draw,
+  writeTitle,
+  refreshingStatus,
+  nextTickStatus,
+  taipeiClock,
+  liveStatus,
+  errorStatus,
+  watchCountdown,
+} from "./ui";
 
 // ── Default Commands ────────────────────────────────────────────────────────
 // Commands `createCliRunner` registers on every CLI's behalf: the `merge`
