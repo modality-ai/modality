@@ -25,6 +25,7 @@ const makeRunner = (options?: Partial<Parameters<typeof createCliRunner>[0]>) =>
     cliName: "demo",
     tagline: "Demo CLI",
     registry: createCommandRegistry([alpha]),
+    envFile: false,
     ...options,
   });
 

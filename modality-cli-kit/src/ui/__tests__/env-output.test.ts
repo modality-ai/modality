@@ -41,6 +41,7 @@ const makeRunner = (
     registry: createCommandRegistry([probe]),
     globalOptionsSchema,
     withoutDefaultGlobalOption,
+    envFile: false,
   });
 
 /** Run with a patched env and captured stdout/stderr. */
@@ -206,6 +207,7 @@ describe("env-driven output format", () => {
       tagline: "Demo",
       registry: createCommandRegistry([humanProbe]),
       withoutDefaultGlobalOption: ["human"],
+      envFile: false,
     });
 
     const { out } = await runWith(
@@ -259,6 +261,7 @@ describe("env-driven output format", () => {
       tagline: "Demo",
       registry: createCommandRegistry([selfPrint]),
       withoutDefaultGlobalOption: true,
+      envFile: false,
     });
 
     const { out } = await runWith({ OUTPUT: "json", DEMO_CLI_OUTPUT: undefined }, ["selfprint"], runner);

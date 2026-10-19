@@ -32,6 +32,7 @@ async function runCapturing(argv: string[], options?: Partial<Parameters<typeof 
       cliName: "demo",
       tagline: "Demo CLI",
       registry: createCommandRegistry([alpha]),
+      envFile: false,
       ...options,
     }).run(argv);
     return { code, logs, errs };

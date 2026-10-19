@@ -215,6 +215,38 @@ Consequences worth knowing:
 - `human` injects `--human` by default (it is a default global option), so handlers that read `--human` get it from `OUTPUT=human` too. Only a CLI that drops `human` via `withoutDefaultGlobalOption` keeps `--human` as a per-command flag the environment never supplies.
 - Commands your package dispatches before delegating to the runner (raw-passthrough argv) never see the injection.
 
+## Project `.env` from Any Directory
+
+Bun loads `.env` from the working directory only, which never fires for a globally installed bin. `createCliRunner` closes that gap: `run()` loads the project's `.env` before dispatch, so a CLI works the same from anywhere.
+
+```bash
+cd /tmp && use-job-hunt search    # still reads <package>/.env
+```
+
+The file is found by walking up from the running entry script — `process.argv[1]`, which the runtime resolves to the real path even through a `node_modules/.bin` symlink — to the nearest `.env`. A kit cannot do this from `import.meta.dir`, since inside a dependency that points at `node_modules/modality-cli-kit/dist/`.
+
+The walk stops at the project root, so a globally installed bin never reads a `.env` that isn't the project's: it passes through `node_modules` (that is how a locally installed CLI reaches the project that installed it) but goes no higher than the first `package.json` outside it.
+
+| Setting | Behavior |
+|---|---|
+| *(omitted)* | Walk up from the entry script to the nearest `.env`, stopping at the project root |
+| `envFile: "/abs/path/.env"` | Read that file instead of walking |
+| `envFile: false` | Load nothing; run on the ambient environment |
+
+A variable already in the environment wins over the file, so `FOO=bar use-job-hunt search` still beats `.env`. A missing, unreadable, or unparsable file leaves the environment untouched — nothing to load is the common case, not an error.
+
+Because the walk reads the real filesystem, a test that asserts on argv or output should pass `envFile: false` — otherwise the developer's own `.env` can reach it.
+
+Call it directly when a CLI owns its own entry point:
+
+```ts
+import { loadProjectEnv } from "modality-cli-kit";
+
+loadProjectEnv();                      // walk up from process.argv[1]
+loadProjectEnv({ envFile: false });    // no-op
+const path = loadProjectEnv();         // the file read, or undefined
+```
+
 ## Tracing Dispatch with `--trace`
 
 A CLI that misbehaves usually misbehaves *before* the handler runs: the wrong command resolved, an env var injected a format flag, an arg coerced to something unexpected. `--trace` turns that path into output.

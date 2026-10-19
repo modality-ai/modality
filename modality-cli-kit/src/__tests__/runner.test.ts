@@ -1,4 +1,7 @@
-import { describe, test, expect } from "bun:test";
+import { afterEach, beforeEach, describe, test, expect } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 import { createCliRunner } from "../createCliRunner";
 import { createCommandRegistry } from "../registry";
@@ -7,6 +10,19 @@ import type { CLICommand } from "../help/types";
 
 // Deterministic help strings.
 setNoColor(true);
+
+// The runner reads its output format from the environment, so an ambient
+// `OUTPUT` or `MY_CLI_OUTPUT` in the developer's shell would silently turn
+// every human-output assertion below into a JSON assertion. Both names the
+// runner consults are cleared per test; the env-loading suite sets its own.
+const FORMAT_KEY = "MY_CLI_OUTPUT"; // cliName "my-cli" → MY_CLI_OUTPUT
+const FORMAT_ENV_KEYS = [FORMAT_KEY, "OUTPUT"] as const;
+beforeEach(() => {
+  for (const key of FORMAT_ENV_KEYS) delete process.env[key];
+});
+afterEach(() => {
+  for (const key of FORMAT_ENV_KEYS) delete process.env[key];
+});
 
 const greet = {
   name: "greet",
@@ -53,7 +69,14 @@ async function runCapturing(
 ) {
   const cap = captureConsole();
   try {
-    const code = await createCliRunner(opts).run(argv);
+    // Pinned off by default: the runner walks the real filesystem for a `.env`
+    // otherwise, which would let a developer's own `.env` reach an unrelated
+    // test. A caller opts back into the walk by naming `envFile` at all — the
+    // key's presence is the signal, so `undefined` still means "walk".
+    const code = await createCliRunner({
+      ...opts,
+      envFile: "envFile" in opts ? opts.envFile : false,
+    }).run(argv);
     return { code, logs: cap.logs, errs: cap.errs };
   } finally {
     cap.restore();
@@ -585,5 +608,126 @@ describe("createCliRunner.getHelp", () => {
     // The runner dispatches `merge`, so help must document it — a CLI that
     // renders help from its own registry alone would silently omit it.
     expect(createCliRunner(baseOpts()).getHelp()).toContain("merge");
+  });
+});
+
+describe("createCliRunner.run env loading", () => {
+  const ENV_KEY = "CLI_KIT_RUN_ENV_TEST";
+
+  /** Point the runner at a temp package holding a .env, and restore argv after. */
+  function withEnvPackage(contents: string) {
+    const root = mkdtempSync(join(tmpdir(), "cli-kit-run-"));
+    const dir = join(root, "dist", "runner");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(root, ".env"), contents);
+    const original = process.argv[1];
+    process.argv[1] = join(dir, "cli.js");
+    return {
+      root,
+      restore: () => {
+        if (original === undefined) delete process.argv[1];
+        else process.argv[1] = original;
+        delete process.env[ENV_KEY];
+        rmSync(root, { recursive: true, force: true });
+      },
+    };
+  }
+
+  test("run() applies the project .env before dispatch", async () => {
+    const pkg = withEnvPackage(`${ENV_KEY}=loaded\n`);
+    try {
+      await runCapturing(walkingOpts(), ["--help"]);
+      expect(process.env[ENV_KEY]).toBe("loaded");
+    } finally {
+      pkg.restore();
+    }
+  });
+
+  test("envFile: false leaves the environment alone", async () => {
+    const pkg = withEnvPackage(`${ENV_KEY}=loaded\n`);
+    try {
+      await runCapturing({ ...baseOpts(), envFile: false }, ["--help"]);
+      expect(process.env[ENV_KEY]).toBeUndefined();
+    } finally {
+      pkg.restore();
+    }
+  });
+
+  test("an explicit envFile is used instead of the walk", async () => {
+    const pkg = withEnvPackage(`${ENV_KEY}=nearest\n`);
+    const explicit = join(pkg.root, "explicit.env");
+    writeFileSync(explicit, `${ENV_KEY}=explicit\n`);
+    try {
+      await runCapturing({ ...baseOpts(), envFile: explicit }, ["--help"]);
+      expect(process.env[ENV_KEY]).toBe("explicit");
+    } finally {
+      pkg.restore();
+    }
+  });
+
+  // The format keys are read out of `process.env` during dispatch, so a value
+  // reaching the renderer is the observable proof that the `.env` was applied
+  // *before* dispatch — not merely that it was parsed.
+  /** Run `fn` with `FORMAT_KEY` at `value` and no shared override, then restore. */
+  async function withFormatEnv(
+    value: string | undefined,
+    fn: () => Promise<void>,
+  ) {
+    const saved = FORMAT_ENV_KEYS.map((key) => [key, process.env[key]] as const);
+    delete process.env.OUTPUT;
+    if (value === undefined) delete process.env[FORMAT_KEY];
+    else process.env[FORMAT_KEY] = value;
+    try {
+      await fn();
+    } finally {
+      for (const [key, original] of saved) {
+        if (original === undefined) delete process.env[key];
+        else process.env[key] = original;
+      }
+    }
+  }
+
+  /** `envFile: undefined` asks for the documented default: walk from `argv[1]`. */
+  const walkingOpts = () => ({ ...baseOpts(), envFile: undefined });
+
+  test("run() applies the .env before env-driven format resolution", async () => {
+    const pkg = withEnvPackage(`${FORMAT_KEY}=json\n`);
+    try {
+      await withFormatEnv(undefined, async () => {
+        const { logs } = await runCapturing(walkingOpts(), ["greet", "bob"]);
+        expect(JSON.parse(logs.join("\n")).message).toBe("hi bob");
+      });
+    } finally {
+      pkg.restore();
+    }
+  });
+
+  test("an ambient format beats the .env through run()", async () => {
+    const pkg = withEnvPackage(`${FORMAT_KEY}=json\n`);
+    try {
+      await withFormatEnv("human", async () => {
+        const { logs } = await runCapturing(walkingOpts(), ["greet", "bob"]);
+        expect(logs.join("\n")).toContain("✓");
+      });
+    } finally {
+      pkg.restore();
+    }
+  });
+
+  test("envFile: false leaves the output format at its default", async () => {
+    const pkg = withEnvPackage(`${FORMAT_KEY}=json\n`);
+    try {
+      // Both keys clear, so the `.env`'s `json` would reach the renderer if
+      // `envFile: false` failed to suppress the walk.
+      await withFormatEnv(undefined, async () => {
+        const { logs } = await runCapturing(
+          { ...baseOpts(), envFile: false },
+          ["greet", "bob"],
+        );
+        expect(logs.join("\n")).toContain("✓");
+      });
+    } finally {
+      pkg.restore();
+    }
   });
 });

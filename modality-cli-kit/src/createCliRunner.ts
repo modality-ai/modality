@@ -44,6 +44,7 @@ import {
 import type { CommandRegistry } from "./registry";
 import type { DefaultCommandName } from "./defaultCommands";
 import { takesRawArgv } from "./defaultCommands/internal";
+import { loadProjectEnv } from "./loadProjectEnv";
 
 /** Options for {@link createCliRunner}. */
 export interface CliRunnerOptions {
@@ -137,6 +138,20 @@ export interface CliRunnerOptions {
    * the CLI's own declaration already wins.
    */
   withoutDefaultGlobalOption?: boolean | GlobalOptionName[];
+  /**
+   * Load a project `.env` before dispatch, so the CLI works when run from any
+   * directory. Omitted walks up from the running entry script to the nearest
+   * `.env` (see {@link loadProjectEnv}); pass a path to pin one, or `false` to
+   * load nothing and run on the ambient environment.
+   *
+   * The walk ends at the project root, so a globally installed CLI never reads
+   * a `.env` belonging to an unrelated directory above it. Tests that assert on
+   * argv or output should pass `false` rather than depend on the filesystem.
+   *
+   * Variables already in the environment win, so an explicit export always
+   * beats the file.
+   */
+  envFile?: string | false;
 }
 
 /** Tokens before the `--` terminator — everything after it is positional. */
@@ -273,6 +288,7 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     withoutDefaultCommand,
     withoutDefaultGlobalOption,
     methodsDir,
+    envFile,
   } = options;
 
   // Help-ready config (default options, default commands, footer) is shared
@@ -530,6 +546,10 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
   async function run(
     rawArgv: string[] = process.argv.slice(2)
   ): Promise<number> {
+    // Before dispatch, so command handlers and the environment-driven format
+    // resolution both see the project's values. A no-op when there is no file.
+    loadProjectEnv({ envFile });
+
     // Built from the raw tokens, before anything is resolved or injected — the
     // tracer has to be live for the first step it reports, and for the catch
     // below. Only pre-terminator tokens count, so a positional `--trace` after

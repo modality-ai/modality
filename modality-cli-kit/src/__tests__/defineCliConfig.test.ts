@@ -81,7 +81,7 @@ describe("defineCliConfig", () => {
     const versioned = defineCliConfig({ ...minimalConfig, version: "1.2.3" });
     const log = spyOn(console, "log").mockImplementation(() => {});
     try {
-      expect(await createCliRunner(versioned).run(["--version"])).toBe(0);
+      expect(await createCliRunner({ ...versioned, envFile: false }).run(["--version"])).toBe(0);
       expect(log.mock.calls.flat().join("\n")).toContain("min v1.2.3");
     } finally {
       log.mockRestore();

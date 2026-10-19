@@ -110,6 +110,10 @@ export { generateCommandsIndex } from "./commandsDir";
 export type { GenerateCommandsIndexOptions } from "./commandsDir";
 export { createCliRunner } from "./createCliRunner";
 export type { CliRunner, CliRunnerOptions } from "./createCliRunner";
+// Project `.env` loading. `createCliRunner` calls it automatically on `run()`;
+// exported so a CLI that owns its own entry point can call it directly.
+export { loadProjectEnv } from "./loadProjectEnv";
+export type { LoadProjectEnvOptions } from "./loadProjectEnv";
 // Exported so a CLI that renders help itself (e.g. an MCP-tool help path) can
 // build the same merged global-options view the runner uses.
 export { resolveGlobalOptions } from "./globalOptions";

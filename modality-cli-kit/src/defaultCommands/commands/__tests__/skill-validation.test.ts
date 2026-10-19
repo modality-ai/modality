@@ -85,6 +85,7 @@ const makeRunner = (methodsDir = METHODS_DIR) =>
     tagline: "Demo CLI",
     registry: createCommandRegistry([alpha]),
     methodsDir,
+    envFile: false,
   });
 
 const cmd = createSkillCommand({ cliName: "demo", methodsDir: METHODS_DIR });

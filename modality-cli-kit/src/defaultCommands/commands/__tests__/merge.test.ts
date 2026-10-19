@@ -32,6 +32,11 @@ function stubStdin(chunks: string[], isTTY = false) {
 const realStdin = process.stdin;
 afterEach(() => {
   Object.defineProperty(process, "stdin", { value: realStdin, configurable: true });
+  // The runner reads its output format from the environment; an ambient
+  // `OUTPUT` in the developer's shell would turn the routing assertions below
+  // into JSON-format assertions.
+  delete process.env.OUTPUT;
+  delete process.env.DEMO_OUTPUT;
 });
 
 const alpha = {
@@ -53,6 +58,7 @@ const makeRunner = (options?: Partial<Parameters<typeof createCliRunner>[0]>) =>
     cliName: "demo",
     tagline: "Demo CLI",
     registry: createCommandRegistry([alpha, beta]),
+    envFile: false,
     ...options,
   });
 
