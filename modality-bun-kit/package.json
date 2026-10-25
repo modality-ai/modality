@@ -1,5 +1,5 @@
 {
-  "version": "1.4.2",
+  "version": "1.4.4",
   "name": "modality-bun-kit",
   "repository": {
     "type": "git",
@@ -13,9 +13,9 @@
   "author": "Hill <hill@kimo.com>",
   "license": "ISC",
   "dependencies": {
-    "@types/bun": "^1.4.2",
+    "@types/bun": "^1.4.4",
     "typescript": "^7.0.2",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "exports": {
     "types": "./dist/types/index.d.ts",
