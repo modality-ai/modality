@@ -54,6 +54,7 @@ export type HelpCliOptions = Pick<
   | "withoutDefaultCommand"
   | "withoutDefaultGlobalOption"
   | "methodsDir"
+  | "defaultSkillPath"
 >;
 
 export function resolveRunnerCli(options: HelpCliOptions) {
@@ -69,6 +70,7 @@ export function resolveRunnerCli(options: HelpCliOptions) {
     withoutDefaultCommand,
     withoutDefaultGlobalOption,
     methodsDir,
+    defaultSkillPath,
   } = options;
 
   // Fold in the defaults here rather than in the consuming package, so
@@ -84,7 +86,8 @@ export function resolveRunnerCli(options: HelpCliOptions) {
     cliName,
     suppliedRegistry,
     withoutDefaultCommand,
-    methodsDir
+    methodsDir,
+    defaultSkillPath
   );
   const registry = defaults.length
     ? createCommandRegistry(

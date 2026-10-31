@@ -18,6 +18,7 @@ import type { CLICommand } from "../help/types";
 import type { CommandRegistry } from "../registry";
 import { createMergeCommand } from "./commands/merge";
 import { createSkillCommand } from "./commands/skill";
+import { createSkillsCommand } from "./commands/skills";
 
 /** What a default command knows about the CLI it is being registered into. */
 interface DefaultCommandContext {
@@ -31,6 +32,13 @@ interface DefaultCommandContext {
    * registering a command that cannot work.
    */
   methodsDir?: string;
+  /**
+   * Absolute path to the CLI's default skill file (`SKILL.mdx`/`SKILL.md`).
+   * `skill` prints it when no method is named; without one, that invocation
+   * auto-detects a file at `methodsDir/../src/` before falling back to
+   * Counter's method list.
+   */
+  defaultSkillPath?: string;
 }
 
 /**
@@ -43,8 +51,12 @@ type DefaultCommandFactory = (context: DefaultCommandContext) => CLICommand | un
 const DEFAULT_COMMANDS = {
   merge: ({ cliName, registry }) =>
     createMergeCommand({ cliName, exampleCommands: exampleCommandNames(registry) }),
-  skill: ({ cliName, methodsDir }) =>
-    methodsDir === undefined ? undefined : createSkillCommand({ cliName, methodsDir }),
+  skill: ({ cliName, methodsDir, defaultSkillPath }) =>
+    methodsDir === undefined
+      ? undefined
+      : createSkillCommand({ cliName, methodsDir, defaultSkillPath }),
+  skills: ({ cliName, methodsDir }) =>
+    methodsDir === undefined ? undefined : createSkillsCommand({ cliName, methodsDir }),
 } satisfies Record<string, DefaultCommandFactory>;
 
 /** Name of a command the runner supplies by default. */
@@ -70,16 +82,18 @@ function exampleCommandNames(registry: CommandRegistry): [string, string] {
  *
  * @param disabled `true` to register none, or the names to leave out.
  * @param methodsDir The CLI's Counter `methods/` tree, when it has one.
+ * @param defaultSkillPath The file `skill` prints when no method is named.
  */
 export function defaultCommandsFor(
   cliName: string,
   registry: CommandRegistry,
   disabled: boolean | DefaultCommandName[] | undefined,
   methodsDir?: string,
+  defaultSkillPath?: string,
 ): CLICommand[] {
   if (disabled === true) return [];
   const off = new Set<string>(Array.isArray(disabled) ? disabled : []);
-  const context: DefaultCommandContext = { cliName, registry, methodsDir };
+  const context: DefaultCommandContext = { cliName, registry, methodsDir, defaultSkillPath };
 
   return Object.entries(DEFAULT_COMMANDS)
     .filter(([name]) => !off.has(name) && !registry.get(name))
@@ -91,3 +105,5 @@ export { createMergeCommand } from "./commands/merge";
 export type { MergeCommandOptions } from "./commands/merge";
 export { createSkillCommand } from "./commands/skill";
 export type { SkillCommandOptions } from "./commands/skill";
+export { createSkillsCommand } from "./commands/skills";
+export type { SkillsCommandOptions } from "./commands/skills";

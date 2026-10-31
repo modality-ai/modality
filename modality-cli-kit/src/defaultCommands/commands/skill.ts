@@ -6,11 +6,16 @@
  * command, help and all.
  *
  * ```bash
- * my-cli skill                       # list available methods
+ * my-cli skill                       # print the default skill, or list methods
  * my-cli skill create-trade-plan     # print one method's skill text
  * my-cli skill <method> --help       # that method's own help
  * my-cli skill <method> --refs       # that method's references
  * ```
+ *
+ * The no-method behavior is a choice the CLI makes. With
+ * {@link SkillCommandOptions.defaultSkillPath} it prints that file — the README
+ * a newcomer should read first — straight from disk, without asking Counter for
+ * anything. Without it, Counter's method list is the answer, as before.
  *
  * ## Why this command validates its own argv
  *
@@ -35,7 +40,8 @@
  * A CLI that never sets `methodsDir` never registers this command and never
  * loads Counter — so the kit stays installable without it.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import { bold, dim, example, header } from "../../help/colors";
 import type { CLICommand } from "../../help/types";
@@ -61,6 +67,16 @@ export interface SkillCommandOptions {
   cliName?: string;
   /** Absolute path to the CLI's Counter `methods/` directory. */
   methodsDir: string;
+  /**
+   * Absolute path to the CLI's default skill file (`SKILL.mdx` or `SKILL.md`).
+   * When set, `skill` with no method name prints this file instead of Counter's
+   * method list. The sibling extension is tried when the given spelling is
+   * absent, so a CLI can point at `.mdx` and still run from a `.md` checkout.
+   * Even when omitted, `skill` auto-detects a `SKILL.mdx`/`SKILL.md` at
+   * `methodsDir/../src/` before falling back to Counter's method list, so a
+   * repository that carries the file needs no option at all.
+   */
+  defaultSkillPath?: string;
   /** Loader for the optional package (default: a dynamic `import()` of it). */
   importCounter?: CounterImporter;
 }
@@ -96,6 +112,28 @@ function asFlag(key: string): string {
 }
 
 /**
+ * The default skill file to print, trying the configured path first and then
+ * its `.md`/`.mdx` sibling. Returns the text, or `undefined` when no candidate
+ * reads successfully — an unreadable spelling counts as absent, so a bad file
+ * can never crash the command with an `EISDIR`/`EACCES` stack trace.
+ */
+function readDefaultSkill(path: string): string | undefined {
+  const candidates = path.endsWith(".mdx")
+    ? [path, `${path.slice(0, -4)}.md`]
+    : path.endsWith(".md")
+      ? [path, `${path.slice(0, -3)}.mdx`]
+      : [path];
+  for (const candidate of candidates) {
+    try {
+      return readFileSync(candidate, "utf8");
+    } catch {
+      // Absent, unreadable, or a directory — try the next spelling.
+    }
+  }
+  return undefined;
+}
+
+/**
  * Build the `skill` {@link CLICommand} for a CLI to register.
  *
  * Missing `@modality-counter/core` is reported as a plain error rather than an
@@ -107,6 +145,7 @@ export function createSkillCommand(options: SkillCommandOptions): CLICommand {
     name = "skill",
     cliName = "<cli>",
     methodsDir,
+    defaultSkillPath,
     importCounter = () => import("@modality-counter/core"),
   } = options;
 
@@ -185,12 +224,49 @@ export function createSkillCommand(options: SkillCommandOptions): CLICommand {
       `${cliName} ${name} <method-name> [--<param> <value>...]`,
       `${cliName} ${name} <method-name> --help`,
       `${cliName} ${name} <method-name> --refs`,
-      `${cliName} ${name}${" ".repeat(20)}(list available methods)`,
+      defaultSkillPath === undefined
+        ? `${cliName} ${name}${" ".repeat(20)}(print the default skill, or list available methods)`
+        : `${cliName} ${name}${" ".repeat(20)}(print the default skill)`,
       "",
       "Parameters are declared by each method; run a method's --help to see them.",
     ],
     examples: [`${cliName} ${name} create-trade-plan`, `${cliName} ${name} <method> --help`],
     async execute(args: string[]): Promise<void> {
+      const method = args[0]?.replace(/^\*/, "");
+
+      // No method named: print the default skill, if there is one. An explicit
+      // `defaultSkillPath` wins; otherwise auto-detect `SKILL.mdx`/`SKILL.md`
+      // next to the methods tree (`methodsDir/../src/`). Read straight from
+      // disk, before Counter is loaded — a CLI can ship a skill file without
+      // the optional package, and the file is the answer even if the package
+      // is missing.
+      if (method === undefined) {
+        if (defaultSkillPath !== undefined) {
+          const contents = readDefaultSkill(defaultSkillPath);
+          if (contents === undefined) {
+            process.exitCode = 1;
+            console.error(
+              `${cliName} ${name}: default skill file not found: ${defaultSkillPath}`,
+            );
+            return;
+          }
+          // Counter prints a method's text with a single trailing newline; match
+          // it so the file's own trailing newline does not double up.
+          console.log(contents.replace(/\n+$/, ""));
+          return;
+        }
+        // Auto-detect relative to methodsDir: [project]/src/SKILL.mdx or .md.
+        const autoContents = readDefaultSkill(
+          join(dirname(methodsDir), "src", "SKILL.mdx"),
+        );
+        if (autoContents !== undefined) {
+          console.log(autoContents.replace(/\n+$/, ""));
+          return;
+        }
+        // Neither an explicit nor an auto-detected file: fall through to Counter's
+        // method list below.
+      }
+
       let counter: typeof import("@modality-counter/core");
       try {
         counter = await importCounter();
@@ -204,8 +280,9 @@ export function createSkillCommand(options: SkillCommandOptions): CLICommand {
 
       // Counter's own CLI calls `process.exit(1)` on a missing methods
       // directory — fatal to any host that embeds it, and to a test run. Report
-      // it here instead, before handing control over.
-      if (!existsSync(methodsDir)) {
+      // it here instead, before handing control over. A stat check keeps a
+      // stray *file* at the path from bypassing the guard and reaching Counter.
+      if (!existsSync(methodsDir) || !statSync(methodsDir).isDirectory()) {
         process.exitCode = 1;
         console.error(`${cliName} ${name}: methods directory not found: ${methodsDir}`);
         return;
@@ -213,9 +290,9 @@ export function createSkillCommand(options: SkillCommandOptions): CLICommand {
 
       const run = () => counter.toCounterCLI(methodsDir, { cliName, command: name })(args);
 
-      // No method named (or a leading flag): Counter prints the method list.
-      // There are no params to validate against without a method.
-      const method = args[0]?.replace(/^\*/, "");
+      // A leading flag — or, without a defaultSkillPath, no method at all —
+      // reaches Counter, which answers with the method list. There are no
+      // params to validate against without a method.
       if (method === undefined || method.startsWith("-")) return run();
 
       // Per-method help is Counter's to render, and asks nothing of the params.

@@ -106,9 +106,9 @@ export interface CliRunnerOptions {
   onEmpty?: () => number | Promise<number>;
   /**
    * Opt out of the commands the runner supplies by default (`merge`, a stdin
-   * sink that folds a piped `&&` chain of `--json` runs into one document, and
-   * `skill` when {@link CliRunnerOptions.methodsDir} is set). They are all on
-   * unless disabled:
+   * sink that folds a piped `&&` chain of `--json` runs into one document,
+   * `skill` and `skills` when {@link CliRunnerOptions.methodsDir} is set). They
+   * are all on unless disabled:
    *
    *  - `true` — register none of them
    *  - `["merge"]` — register all but the named ones
@@ -119,13 +119,26 @@ export interface CliRunnerOptions {
   withoutDefaultCommand?: boolean | DefaultCommandName[];
   /**
    * Absolute path to this CLI's Counter `methods/` tree. Supplying it registers
-   * the `skill` default command (`my-cli skill <method>`), which prints a
-   * method's raw skill text; omit it and no `skill` command exists.
+   * the `skill` and `skills` default commands (`my-cli skill <method>`,
+   * `my-cli skills`), which print a method's raw skill text and list the
+   * methods; omit it and neither command exists.
    *
    * It also needs the optional `@modality-counter/core` package installed —
-   * the command imports it lazily and reports a missing install as an error.
+   * the commands import it lazily and report a missing install as an error.
    */
   methodsDir?: string;
+  /**
+   * Absolute path to this CLI's default skill file (`SKILL.mdx`/`SKILL.md`).
+   * When set, `my-cli skill` with no method name prints that file — raw, read
+   * from disk, without loading Counter — instead of listing methods. The
+   * sibling `.md`/`.mdx` spelling is tried when the given one is absent. Even
+   * when this option is omitted, `skill` auto-detects a `SKILL.mdx`/`SKILL.md`
+   * at `methodsDir/../src/` before falling back to Counter's method list.
+   *
+   * Only meaningful alongside {@link CliRunnerOptions.methodsDir}, which is
+   * what registers the `skill` command in the first place.
+   */
+  defaultSkillPath?: string;
   /**
    * Opt out of the global options the runner supplies by default (`json`,
    * `human`, `no-cache`). They are all on unless disabled:

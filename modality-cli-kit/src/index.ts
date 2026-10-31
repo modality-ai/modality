@@ -171,14 +171,16 @@ export {
 
 // ── Default Commands ────────────────────────────────────────────────────────
 // Commands `createCliRunner` registers on every CLI's behalf: the `merge`
-// stdin sink, which folds a piped command chain into one document, and `skill`,
-// which prints a Counter method's raw skill text for a CLI that sets
-// `methodsDir`.
-export { createMergeCommand, createSkillCommand } from "./defaultCommands";
+// stdin sink, which folds a piped command chain into one document; `skill`,
+// which prints a Counter method's raw skill text (or the CLI's default skill
+// file when `defaultSkillPath` is set); and `skills`, which lists the methods.
+// The last two need `methodsDir`.
+export { createMergeCommand, createSkillCommand, createSkillsCommand } from "./defaultCommands";
 export type {
   DefaultCommandName,
   MergeCommandOptions,
   SkillCommandOptions,
+  SkillsCommandOptions,
 } from "./defaultCommands";
 
 // The multi-document JSON parsing behind `merge`, usable without it — parse a
