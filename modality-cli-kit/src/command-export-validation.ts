@@ -28,7 +28,7 @@ export interface CommandExportValidationOptions {
  *
  * ```ts
  * // src/scripts/commands/__tests__/exports.test.ts
- * import { setupCommandExportValidation } from "modality-cli-kit";
+ * import { setupCommandExportValidation } from "modality-cli-kit/testing";
  * setupCommandExportValidation(import.meta.dir + "/..");
  * ```
  */

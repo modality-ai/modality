@@ -1,5 +1,5 @@
 {
-  "version": "0.16.1",
+  "version": "0.17.0",
   "name": "modality-cli-kit",
   "repository": {
     "type": "git",
@@ -18,15 +18,22 @@
     "modality-mcp-kit": "^2.1.0"
   },
   "optionalDependencies": {
-    "@modality-counter/core": "^2.7.0"
+    "@modality-counter/core": "^2.9.0"
   },
   "devDependencies": {
-    "modality-bun-kit": "^1.4.2"
+    "modality-bun-kit": "^1.4.4"
   },
   "exports": {
-    "types": "./dist/types/index.d.ts",
-    "require": "./dist/index.js",
-    "import": "./dist/index.js"
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/types/testing.d.ts",
+      "require": "./dist/testing.js",
+      "import": "./dist/testing.js"
+    }
   },
   "types": "./dist/types/index.d.ts",
   "main": "./dist/index.js",
@@ -37,7 +44,7 @@
   "scripts": {
     "build:clean": "find ./dist -name '*.*' | xargs rm -rf",
     "build:types": "bun tsc -p ./",
-    "build:src": "bun build src/index.ts --outdir dist --target=node --external @modality-counter/core",
+    "build:src": "bun build src/index.ts src/testing.ts --outdir dist --target=node --external @modality-counter/core",
     "build:cli": "bun build src/cli.ts --outdir dist --target=bun --external @modality-counter/core",
     "build": "bun run build:clean && bun run build:types && bun run build:src && bun run build:cli",
     "test": "npm run build && bun test",

@@ -284,7 +284,14 @@ export const registry = await createCommandRegistryFromDir(
 
 Every file in `commandsDir` that exports a `*Command` is registered. Adding a command is dropping in a file; removing one is deleting that file. Nothing else is edited, so no central list can be left pointing at a command that no longer exists.
 
-The scan accepts a `file:` URL or an absolute path, loads both `.ts` and `.js` (the same directory is source in development and build output in `dist`), and ignores `.d.ts`, `.test.*`, and `.spec.*`. A file that exports no command — or that throws while importing — is reported on stderr and skipped, so one broken module cannot take `--help` and every working command down with it. `setupCommandExportValidation` is the strict counterpart: it fails the build on exactly those files, which is where strictness is free.
+The scan accepts a `file:` URL or an absolute path, loads both `.ts` and `.js` (the same directory is source in development and build output in `dist`), and ignores `.d.ts`, `.test.*`, and `.spec.*`. A file that exports no command — or that throws while importing — is reported on stderr and skipped, so one broken module cannot take `--help` and every working command down with it. `setupCommandExportValidation` is the strict counterpart: it fails the build on exactly those files, which is where strictness is free. It is Bun-test based, so import it from `modality-cli-kit/testing` — the root entry stays free of `bun:test`:
+
+```ts
+// src/scripts/commands/__tests__/exports.test.ts
+import { setupCommandExportValidation } from "modality-cli-kit/testing";
+
+setupCommandExportValidation(import.meta.dir + "/..");
+```
 
 Use `loadCommandsFromDir` when you want the array rather than a registry, and `exportSuffix` when your commands export something other than `*Command`.
 

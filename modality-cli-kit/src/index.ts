@@ -88,11 +88,10 @@ export type { GetCliHelpOptions } from "./getHelp";
 export { defineCliConfig } from "./defineCliConfig";
 export type { CliConfig } from "./defineCliConfig";
 
-// Reusable test suite: enforce the one-export-per-command-module rule.
-export { setupCommandExportValidation } from "./command-export-validation";
 // Command-file predicate shared by the scanner and the export validator.
+// The reusable export-validation suite lives in "./testing" (it imports
+// bun:test, which must stay out of this bundle).
 export { isCommandFile } from "./command-file";
-export type { CommandExportValidationOptions } from "./command-export-validation";
 
 // ── Command Registry & Runner ────────────────────────────────────────────────
 // Shareable command-registry + argv-dispatch loop so a consuming CLI only
