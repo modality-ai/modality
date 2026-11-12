@@ -33,4 +33,21 @@ describe("stripAnsi", () => {
   it("preserves non-ANSI content around stripped sequences", () => {
     expect(stripAnsi("before \x1b[32m after")).toBe("before  after");
   });
+
+  // Non-SGR CSI sequences (cursor movement, erase, clear) are now stripped too.
+  it("strips cursor-positioning sequence", () => {
+    expect(stripAnsi("\x1b[1;1Hhello")).toBe("hello");
+  });
+
+  it("strips erase-screen sequence", () => {
+    expect(stripAnsi("\x1b[2Jhello")).toBe("hello");
+  });
+
+  it("strips clear-line sequence", () => {
+    expect(stripAnsi("hello\x1b[K")).toBe("hello");
+  });
+
+  it("strips mixed SGR and cursor sequences", () => {
+    expect(stripAnsi("\x1b[31m\x1b[2Jred\x1b[0m\x1b[K")).toBe("red");
+  });
 });

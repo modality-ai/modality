@@ -124,15 +124,18 @@ describe("skill with no method name", () => {
     const options: unknown[] = [];
     const module = {
       getAllCounterItems: async () => [],
-      readMdxYaml: async () => undefined,
       toCounterCLI: (_baseDir: string, opts?: unknown) => async (args: string[]) => {
         calls.push(args);
         options.push(opts);
       },
       toCounterCLIHelp: () => async () => false,
     };
+    const mdxModule = {
+      readMdxYaml: async () => undefined,
+    };
     return {
       module: module as unknown as typeof import("@modality-counter/core"),
+      mdxModule: mdxModule as unknown as typeof import("@modality-counter/core/mdx"),
       calls,
       options,
     };
@@ -242,6 +245,7 @@ describe("skill with no method name", () => {
       cliName: "demo",
       methodsDir: import.meta.dir,
       importCounter: async () => counter.module,
+      importMdx: async () => counter.mdxModule,
     });
 
     const { errs } = await executeCapturing(cmd, []);
@@ -261,6 +265,7 @@ describe("skill with no method name", () => {
       cliName: "demo",
       methodsDir: join(dir, "methods"),
       importCounter: async () => counter.module,
+      importMdx: async () => counter.mdxModule,
     });
 
     const { logs, errs } = await executeCapturing(cmd, []);
@@ -280,6 +285,7 @@ describe("skill with no method name", () => {
       cliName: "demo",
       methodsDir: join(dir, "methods"),
       importCounter: async () => counter.module,
+      importMdx: async () => counter.mdxModule,
     });
 
     const { logs, errs } = await executeCapturing(cmd, []);
@@ -294,6 +300,7 @@ describe("skill with no method name", () => {
       cliName: "demo",
       methodsDir: import.meta.dir,
       importCounter: async () => counter.module,
+      importMdx: async () => counter.mdxModule,
     });
 
     const { errs } = await executeCapturing(cmd, []);
@@ -309,6 +316,7 @@ describe("skill with no method name", () => {
       methodsDir: import.meta.dir,
       defaultSkillPath: join(dir, "SKILL.mdx"),
       importCounter: async () => counter.module,
+      importMdx: async () => counter.mdxModule,
     });
 
     await executeCapturing(cmd, ["create-trade-plan"]);
@@ -325,6 +333,7 @@ describe("skill with no method name", () => {
       methodsDir: import.meta.dir,
       defaultSkillPath: join(dir, "SKILL.mdx"),
       importCounter: async () => counter.module,
+      importMdx: async () => counter.mdxModule,
     });
 
     const { errs } = await executeCapturing(cmd, ["--refs"]);
@@ -340,6 +349,7 @@ describe("skill with no method name", () => {
       cliName: "demo",
       methodsDir: join(import.meta.dir, "skill.test.ts"),
       importCounter: async () => counter.module,
+      importMdx: async () => counter.mdxModule,
     });
 
     const { errs } = await executeCapturing(cmd, ["create-trade-plan"]);

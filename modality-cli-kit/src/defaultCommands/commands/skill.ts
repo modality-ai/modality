@@ -79,6 +79,8 @@ export interface SkillCommandOptions {
   defaultSkillPath?: string;
   /** Loader for the optional package (default: a dynamic `import()` of it). */
   importCounter?: CounterImporter;
+  /** Loader for the optional `@modality-counter/core/mdx` subpath (default: a dynamic `import()` of it). */
+  importMdx?: () => Promise<typeof import("@modality-counter/core/mdx")>;
 }
 
 /** The kit's own palette, handed to Counter so its help matches the CLI's. */
@@ -155,6 +157,7 @@ export function createSkillCommand(options: SkillCommandOptions): CLICommand {
    */
   async function validate(
     counter: typeof import("@modality-counter/core"),
+    mdx: typeof import("@modality-counter/core/mdx"),
     method: string,
     args: string[],
   ): Promise<string | undefined> {
@@ -168,7 +171,7 @@ export function createSkillCommand(options: SkillCommandOptions): CLICommand {
       // disagreeing.
       if (!item) return undefined;
 
-      const declared = (await counter.readMdxYaml(item.filePath))?.method?.usage?.parameters;
+      const declared = (await mdx.readMdxYaml(item.filePath))?.method?.usage?.parameters;
       accepted = { ...COMMAND_PARAMS, ...declared };
       schema = buildMethodParamsSchema(accepted);
     } catch (error) {
@@ -268,8 +271,10 @@ export function createSkillCommand(options: SkillCommandOptions): CLICommand {
       }
 
       let counter: typeof import("@modality-counter/core");
+      let mdx: typeof import("@modality-counter/core/mdx");
       try {
         counter = await importCounter();
+        mdx = await (options.importMdx ?? (() => import("@modality-counter/core/mdx")))();
       } catch {
         process.exitCode = 1;
         console.error(
@@ -299,7 +304,7 @@ export function createSkillCommand(options: SkillCommandOptions): CLICommand {
       const showHelp = counter.toCounterCLIHelp(cliName, methodsDir, COLOR_FORMAT, name);
       if (await showHelp(args)) return;
 
-      const problem = await validate(counter, method, args);
+      const problem = await validate(counter, mdx, method, args);
       if (problem !== undefined) {
         process.exitCode = 1;
         console.error(problem);

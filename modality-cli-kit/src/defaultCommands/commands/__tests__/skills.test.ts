@@ -64,7 +64,6 @@ function fakeCounter() {
   const options: unknown[] = [];
   const module = {
     getAllCounterItems: async () => [],
-    readMdxYaml: async () => undefined,
     toCounterCLI: (_baseDir: string, opts?: unknown) => async (args: string[]) => {
       calls.push(args);
       options.push(opts);

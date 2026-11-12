@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { z } from "zod";
 import { getHelp, type CLICommand, type HelpConfig } from "../help";
+import { stripAnsi } from "../ui/strip-ansi";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -18,12 +19,6 @@ function makeConfig(
     commands: cmds,
     ...overrides,
   };
-}
-
-/** Strip ANSI to measure visible column widths. */
-function stripAnsi(s: string): string {
-  // eslint-disable-next-line no-control-regex
-  return s.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────

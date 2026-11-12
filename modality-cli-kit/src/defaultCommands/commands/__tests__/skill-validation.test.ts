@@ -34,27 +34,34 @@ setNoColor(true);
 // factory can be a stable shape that reads current state per call.
 const counter = {
   items: [] as { id: string; filePath: string }[],
-  yaml: undefined as unknown,
-  /** When set, `readMdxYaml` rejects with it — a malformed file on disk. */
-  throwOnRead: undefined as Error | undefined,
   /** Every argv array handed to `toCounterCLI`, in order. */
   cliCalls: [] as string[][],
   /** The options object handed to `toCounterCLI`, parallel to `cliCalls`. */
   cliOptions: [] as unknown[],
 };
 
+// The mocked `@modality-counter/core/mdx` subpath, which now owns `readMdxYaml`.
+const mdx = {
+  yaml: undefined as unknown,
+  /** When set, `readMdxYaml` rejects with it — a malformed file on disk. */
+  throwOnRead: undefined as Error | undefined,
+};
+
 const counterMock = () => ({
   getAllCounterItems: async () => counter.items,
-  readMdxYaml: async () => {
-    if (counter.throwOnRead) throw counter.throwOnRead;
-    return counter.yaml;
-  },
   toCounterCLI: (_baseDir: string, options?: unknown) => async (args: string[]) => {
     counter.cliCalls.push(args);
     counter.cliOptions.push(options);
     return { success: true };
   },
   toCounterCLIHelp: () => async () => false,
+});
+
+const mdxMock = () => ({
+  readMdxYaml: async () => {
+    if (mdx.throwOnRead) throw mdx.throwOnRead;
+    return mdx.yaml;
+  },
 });
 
 /** A method with one required object parameter — the default MDX. */
@@ -158,11 +165,12 @@ describe("skill command without @modality-counter/core", () => {
 
 describe("skill command with @modality-counter/core mocked", () => {
   let resetMock: (() => void) | undefined;
+  let resetMdxMock: (() => void) | undefined;
 
   beforeEach(async () => {
     counter.items = [{ id: "create-trade-plan", filePath: "/repo/methods/create-trade-plan.md" }];
-    counter.yaml = structuredClone(DEFAULT_YAML);
-    counter.throwOnRead = undefined;
+    mdx.yaml = structuredClone(DEFAULT_YAML);
+    mdx.throwOnRead = undefined;
     counter.cliCalls = [];
     counter.cliOptions = [];
 
@@ -170,9 +178,13 @@ describe("skill command with @modality-counter/core mocked", () => {
     // node_modules lookup for the original-import attempt, which fails here
     // and falls back gracefully.
     resetMock = await bunMockModule("@modality-counter/core", counterMock, import.meta.dir);
+    resetMdxMock = await bunMockModule("@modality-counter/core/mdx", mdxMock, import.meta.dir);
   });
 
-  afterEach(() => resetMock?.());
+  afterEach(() => {
+    resetMock?.();
+    resetMdxMock?.();
+  });
 
   afterAll(() => clearAllMocks());
 
@@ -229,7 +241,7 @@ describe("skill command with @modality-counter/core mocked", () => {
     });
 
     test("a missing required parameter is reported as such, not as a bad value", async () => {
-      counter.yaml = {
+      mdx.yaml = {
         method: {
           usage: {
             parameters: {
@@ -245,7 +257,7 @@ describe("skill command with @modality-counter/core mocked", () => {
     });
 
     test("an authoring mistake in the method's MDX names the method", async () => {
-      counter.yaml = { method: { usage: { parameters: { blob: { type: "blob" } } } } };
+      mdx.yaml = { method: { usage: { parameters: { blob: { type: "blob" } } } } };
       const { errs } = await executeCapturing(["create-trade-plan"]);
       expect(process.exitCode).toBe(1);
       expect(counter.cliCalls).toEqual([]);
@@ -257,7 +269,7 @@ describe("skill command with @modality-counter/core mocked", () => {
     test("an unreadable method file reports the method, not an unhandled error", async () => {
       // A malformed MDX/YAML on disk rejects `readMdxYaml` — the failure must
       // come back as the per-method message, not a raw rejection out of run().
-      counter.throwOnRead = new Error("YAML parse error at line 3");
+      mdx.throwOnRead = new Error("YAML parse error at line 3");
       const { errs } = await executeCapturing(["create-trade-plan", "--trigger", "{}"]);
       expect(process.exitCode).toBe(1);
       expect(counter.cliCalls).toEqual([]);
@@ -277,7 +289,7 @@ describe("skill command with @modality-counter/core mocked", () => {
     test("a method's own declaration wins over the command's", async () => {
       // `{ ...COMMAND_PARAMS, ...declared }` — a method that declares
       // `reference` for itself replaces the command's string with its own type.
-      counter.yaml = { method: { usage: { parameters: { reference: { type: "number" } } } } };
+      mdx.yaml = { method: { usage: { parameters: { reference: { type: "number" } } } } };
       const { errs } = await executeCapturing(["create-trade-plan", "--reference", "abc"]);
       expect(process.exitCode).toBe(1);
       expect(errs.join("\n")).toContain("--reference — expected a number");

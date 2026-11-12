@@ -49,7 +49,9 @@ declare module "@modality-counter/core" {
 
   /** Discover items of the given kinds under a Counter base directory. */
   export function getAllCounterItems(kinds: string[], baseDir: string): Promise<CounterItem[]>;
+}
 
+declare module "@modality-counter/core/mdx" {
   /**
    * Read an MDX file's YAML front matter. `method.usage.parameters` is the
    * declaration this command validates against.
