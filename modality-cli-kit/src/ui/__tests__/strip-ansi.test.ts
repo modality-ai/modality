@@ -51,3 +51,37 @@ describe("stripAnsi", () => {
     expect(stripAnsi("\x1b[31m\x1b[2Jred\x1b[0m\x1b[K")).toBe("red");
   });
 });
+
+describe("stripAnsi OSC sequences", () => {
+  it("strips OSC terminated by BEL", () => {
+    expect(stripAnsi("\x1b]0;title\x07hello")).toBe("hello");
+  });
+
+  it("strips OSC terminated by ST (ESC backslash)", () => {
+    expect(stripAnsi("\x1b]0;title\x1b\\hello")).toBe("hello");
+  });
+
+  it("strips terminal hyperlink (BEL terminator)", () => {
+    expect(stripAnsi("\x1b]8;;https://example.com\x07click\x1b]8;;\x07")).toBe("click");
+  });
+
+  it("strips terminal hyperlink (ST terminator)", () => {
+    expect(stripAnsi("\x1b]8;;https://example.com\x1b\\click\x1b]8;;\x1b\\")).toBe("click");
+  });
+
+  it("strips multiple OSC sequences", () => {
+    expect(stripAnsi("\x1b]8;;a\x07x\x1b]8;;\x07 \x1b]8;;b\x1b\\y\x1b]8;;\x1b\\")).toBe("x y");
+  });
+
+  it("strips OSC mixed with SGR", () => {
+    expect(stripAnsi("\x1b]8;;url\x07\x1b[31mred\x1b[0m\x1b]8;;\x07")).toBe("red");
+  });
+
+  it("leaves OSC without terminator untouched", () => {
+    expect(stripAnsi("text \x1b]8;;url no terminator")).toBe("text \x1b]8;;url no terminator");
+  });
+
+  it("preserves plain text around OSC", () => {
+    expect(stripAnsi("before \x1b]0;t\x07 after")).toBe("before  after");
+  });
+});
