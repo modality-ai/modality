@@ -5,6 +5,7 @@
 
 import { mock } from "bun:test";
 import { resolve } from "node:path";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 
 type MockFactory<T = any> = () => T;
@@ -13,20 +14,40 @@ type ResetFunction = () => void;
 // Store original modules for restoration
 const moduleStore = new Map<string, any>();
 
+// Probe order mirrors Bun's resolver precedence.
+const PROBE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
+
+/**
+ * Normalize a module path to the real file on disk. Bun's module-mock
+ * registry keys by exact resolved path, so an extensionless specifier (the
+ * common TS style, e.g. "../../lib/candle-cache") must be probed against the
+ * standard extensions (.ts/.tsx/.js/...) — otherwise mock.module() only
+ * intercepts direct imports and transitive importers keep hitting the real
+ * module. An existing file path (dotted names included, e.g. "foo.config")
+ * is returned unchanged; directory specifiers ("./lib") resolve to their
+ * index file.
+ */
+function resolveToFile(p: string): string {
+  if (existsSync(p)) return p;
+  for (const ext of PROBE_EXTENSIONS) {
+    if (existsSync(p + ext)) return p + ext;
+    if (existsSync(p + "/index" + ext)) return p + "/index" + ext;
+  }
+  return p;
+}
+
 /**
  * Resolve a bare package name (e.g. "modality-ai") to its actual entry-point
  * file path.  Bun's `mock.module()` registers mocks by file path, so passing
  * a bare specifier only intercepts direct imports of that specifier — it does
  * NOT intercept imports in transitive dependencies that Bun resolves to the
  * real file on disk.  Resolving first ensures the mock applies everywhere.
- *
- * Relative / absolute paths are returned unchanged.
  */
 function resolveModulePath(modulePath: string, callerDir?: string): string {
-  // Absolute path — use as-is.
-  if (modulePath.startsWith("/")) return modulePath;
-  // Relative path — resolve against callerDir.
-  if (modulePath.startsWith(".")) return resolve(callerDir || process.cwd(), modulePath);
+  // Absolute path — normalize like a resolved relative one.
+  if (modulePath.startsWith("/")) return resolveToFile(modulePath);
+  // Relative path — resolve against callerDir, then normalize.
+  if (modulePath.startsWith(".")) return resolveToFile(resolve(callerDir || process.cwd(), modulePath));
 
   // Bare package name — resolve to the real entry-point on disk.
   // Use createRequire from the caller's directory so locally-linked

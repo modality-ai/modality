@@ -14,21 +14,13 @@ describe("bunMockModule", () => {
   });
 
   test("should throw on invalid path", async () => {
-    try {
-      await bunMockModule("", () => ({}));
-      expect(true).toBe(false); // Should have thrown
-    } catch (e) {
-      expect((e as Error).message).toMatch(/Invalid module path/);
-    }
+    await expect(bunMockModule("", () => ({}))).rejects.toThrow(/Invalid module path/);
   });
 
   test("should throw on invalid mockFactory", async () => {
-    try {
-      await bunMockModule("./modalityLogger.ts", {} as any);
-      expect(true).toBe(false); // Should have thrown
-    } catch (e) {
-      expect((e as Error).message).toMatch(/Invalid mock factory/);
-    }
+    await expect(bunMockModule("./modalityLogger.ts", {} as any)).rejects.toThrow(
+      /Invalid mock factory/,
+    );
   });
 
   // --- Graceful fallback tests (new behavior) ---
@@ -81,5 +73,53 @@ describe("bunMockModule — module path resolution", () => {
     const mod: any = await import(path);
     expect(mod.custom).toBe("value");
     reset();
+  });
+});
+
+// --- Transitive interception (extensionless relative specifier) ---
+// A mock registered under an extensionless path must intercept not only direct
+// imports but also modules resolved transitively (a consumer importing "./dep"
+// resolves to dep.ts on disk). Regression for the case where mock.module() was
+// registered under the extensionless string and only direct imports matched.
+describe("bunMockModule — transitive interception", () => {
+  test("mock reaches a consumer that imports the dependency extensionlessly", async () => {
+    const reset = await bunMockModule(
+      "./fixtures/dep",
+      () => ({ depValue: () => "mocked" }),
+      __dirname,
+    );
+    const consumer = await import("./fixtures/consumer");
+    expect(consumer.consumed()).toBe("mocked");
+    reset();
+    const restored = await import("./fixtures/consumer");
+    expect(restored.consumed()).toBe("real");
+  });
+
+  test("explicit-extension registration keys the same real path as transitive importers", async () => {
+    // Mocking "./fixtures/dep.ts" (with extension) must intercept a consumer
+    // that imports "./dep" (extensionless) — both forms normalize to dep.ts.
+    const reset = await bunMockModule(
+      "./fixtures/dep.ts",
+      () => ({ depValue: () => "mocked-ext" }),
+      __dirname,
+    );
+    const consumer = await import("./fixtures/consumer");
+    expect(consumer.consumed()).toBe("mocked-ext");
+    reset();
+    const restored = await import("./fixtures/consumer");
+    expect(restored.consumed()).toBe("real");
+  });
+
+  test("mock registers against a directory index file (barrel style)", async () => {
+    const reset = await bunMockModule(
+      "./fixtures/index-dep",
+      () => ({ depValue: () => "mocked-index" }),
+      __dirname,
+    );
+    const mod: any = await import("./fixtures/index-dep");
+    expect(mod.depValue()).toBe("mocked-index");
+    reset();
+    const restored: any = await import("./fixtures/index-dep");
+    expect(restored.depValue()).toBe("real");
   });
 });
