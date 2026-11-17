@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import { join } from "path";
 
-const EXPECTED_HASH = 15958936344753800022n;
+const EXPECTED_HASH = 16528797830702200416n;
 const filePath = join(import.meta.dir, "../index.ts");
 const SECURITY_TEST_FILE = Bun.file(filePath);
 

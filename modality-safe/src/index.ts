@@ -24,13 +24,16 @@ const API_KEY_PATTERNS = [
   /eyJ[a-zA-Z0-9-_]+\.[a-zA-Z0-9-_]+\.[a-zA-Z0-9-_]+/g,
   // AWS Access Keys
   /AKIA[0-9A-Z]{16}/g,
-  // AWS Secret Keys (very specific to avoid false positives - must contain mixed case and not be just = chars)
-  // The run is anchored on both sides (lookbehind + trailing lookahead), so the full delimited
-  // run is matched at its true bounds — no shifted matches on runs longer than 40 chars. The
-  // class-only lookaheads are gated behind the structural run check, so positions without a
+  // AWS Secret Keys (very specific to avoid false positives - must contain mixed case and digits)
+  // The run is delimited by the lookbehind + trailing negative lookahead, so the full base64-style
+  // run is matched at its true bounds — any non-key char (quote, comma, period, bracket, whitespace,
+  // EOL) is a valid boundary, since AWS secrets are base64 and may be followed by any delimiter.
+  // The run is capped at 128 chars: longer runs are data blobs (stroke tables, encoded payloads),
+  // not keys — and the trailing boundary lookahead makes the engine reject over-long runs entirely.
+  // The case/digit lookaheads are gated behind the structural 40+ run check, so positions without a
   // 40+ char run are rejected cheaply — an unbounded (?=.*[x]) lookahead costs a full rescan
   // of the line at every scan position.
-  /(?<![A-Za-z0-9/+=])(?=[A-Za-z0-9/+=]{40,}(?=\s|$|["']))(?=[A-Za-z0-9/+=]*[a-z])(?=[A-Za-z0-9/+=]*[A-Z])(?=[A-Za-z0-9/+=]*[0-9])[A-Za-z0-9/+=]{40,}(?=\s|$|["'])/g,
+  /(?<![A-Za-z0-9/+=])(?=[A-Za-z0-9/+=]{40,128})(?=[A-Za-z0-9/+=]*[a-z])(?=[A-Za-z0-9/+=]*[A-Z])(?=[A-Za-z0-9/+=]*[0-9])[A-Za-z0-9/+=]{40,128}(?![A-Za-z0-9/+=])/g,
   // Slack tokens
   /xox[baprs]-[0-9a-zA-Z-]{10,48}/g,
   // Discord tokens
@@ -65,6 +68,9 @@ const WHITE_LIST_PATTERNS = [
 
   // Safe empty string API key defaults in configuration
   /apiKey:\s*""\s*,?/i, // Example: 'apiKey: "",' or 'apiKey: ""'
+
+  // The ordered base62 alphabet constant (e.g. charset tables for ID generators)
+  /0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz/,
 ];
 
 // Files/directories to exclude from scanning
@@ -101,32 +107,9 @@ const SCANNED_FILE_EXTENSIONS = [
   ".json", // JSON configuration files
 ];
 
-function isSafePattern(
-  text: string,
-  content?: string,
-  lineNumber?: number
-): boolean {
-  // More robust code block detection if full content is provided
-  if (content && lineNumber) {
-    const codeBlockRegex = /```[\s\S]*?```/g;
-    const codeBlockMatches = content.matchAll(codeBlockRegex);
-
-    for (const match of codeBlockMatches) {
-      if (match.index !== undefined) {
-        const codeBlockStart = match.index;
-        const codeBlockEnd = codeBlockStart + match[0].length;
-        const lineStartIndex = content
-          .substring(0, codeBlockStart)
-          .split("\n").length;
-        const lineEndIndex = content
-          .substring(0, codeBlockEnd)
-          .split("\n").length;
-
-        if (lineNumber >= lineStartIndex && lineNumber <= lineEndIndex) {
-          return true; // Inside a code block
-        }
-      }
-    }
+function isSafePattern(text: string, inCodeBlock: boolean): boolean {
+  if (inCodeBlock) {
+    return true; // Inside a code block
   }
 
   // Check for comment separators (lines with only repeating characters)
@@ -137,6 +120,26 @@ function isSafePattern(
 
   // Check against regular safe patterns
   return WHITE_LIST_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+/**
+ * Compute the 1-based line ranges covered by fenced code blocks (```...```)
+ * in one pass over the content, so per-line checks don't rescan the file.
+ */
+function getCodeBlockLineRanges(content: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  const lineAt = (index: number) =>
+    content.substring(0, index).split("\n").length;
+
+  for (const match of content.matchAll(/```[\s\S]*?```/g)) {
+    if (match.index !== undefined) {
+      ranges.push([
+        lineAt(match.index),
+        lineAt(match.index + match[0].length),
+      ]);
+    }
+  }
+  return ranges;
 }
 
 /**
@@ -268,26 +271,52 @@ export function detectAPIKeyLeaks(
 ): Array<{ line: number; match: string; pattern: string }> {
   const lines = content.split("\n");
   const leaks: Array<{ line: number; match: string; pattern: string }> = [];
+  // Code-block line ranges are computed once per file — recomputing them per
+  // line would rescan the whole content each time (O(lines × fileSize)).
+  const codeBlockRanges = getCodeBlockLineRanges(content);
+  const lineIsSafe = (line: string, lineNumber: number) =>
+    isSafePattern(
+      line,
+      codeBlockRanges.some(([s, e]) => lineNumber >= s && lineNumber <= e)
+    );
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     // The safe-pattern check depends only on the line and its position, so it
     // is evaluated once per line rather than once per match.
-    const lineIsSafe = isSafePattern(line, content, i + 1);
+
+    // Ranges already reported on this line. Earlier patterns in API_KEY_PATTERNS
+    // are more specific, so an overlapping match from a later (generic) pattern
+    // is the same secret reported twice — e.g. a JWT payload segment or the body
+    // of an sk- key also satisfying the generic AWS secret-key run pattern.
+    const takenRanges: Array<[number, number]> = [];
 
     for (const pattern of API_KEY_PATTERNS) {
-      const matches = line.match(pattern);
-      if (matches) {
-        for (const match of matches) {
-          // Skip if it's a safe pattern (environment variable reference, comment, etc.)
-          if (!lineIsSafe) {
-            leaks.push({
-              line: i + 1,
-              match: match,
-              pattern: pattern.toString(),
-            });
-          }
-        }
+      // exec loop on the shared regex (reset lastIndex first) rather than
+      // matchAll — matchAll clones the regex on every call, which dominates
+      // runtime on large scans.
+      pattern.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = pattern.exec(line)) !== null) {
+        // Skip if it's a safe pattern (environment variable reference, comment, etc.)
+        if (lineIsSafe(line, i + 1)) continue;
+
+        // Skip URL path fragments: '/' joins path segments into 40+ char runs
+        // (e.g. doc links like com/science/article/pii/S1877050924018283), while
+        // a real key is a single base64 token and essentially never contains
+        // three slashes.
+        if (match[0].split("/").length - 1 >= 3) continue;
+
+        const start = match.index ?? 0;
+        const end = start + match[0].length;
+        if (takenRanges.some(([s, e]) => start < e && end > s)) continue;
+
+        takenRanges.push([start, end]);
+        leaks.push({
+          line: i + 1,
+          match: match[0],
+          pattern: pattern.toString(),
+        });
       }
     }
   }
@@ -326,7 +355,9 @@ export async function detectAPIKeyLeaksWithFiles(
       // Transform basic leaks to include file info and check against file-based whitelist
       const leaksWithFile = basicLeaks
         .map((leak) => {
-          const key = `${filePath}:${leak.match}`;
+          // Key on the path relative to the scanned directory so whitelist
+          // files are portable across checkouts and machines.
+          const key = `${relative(directory, filePath)}:${leak.match}`;
           return {
             ...leak,
             filePath,
