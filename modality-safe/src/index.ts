@@ -25,7 +25,12 @@ const API_KEY_PATTERNS = [
   // AWS Access Keys
   /AKIA[0-9A-Z]{16}/g,
   // AWS Secret Keys (very specific to avoid false positives - must contain mixed case and not be just = chars)
-  /(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])[A-Za-z0-9/+=]{40}(?=\s|$|"|')/g,
+  // The run is anchored on both sides (lookbehind + trailing lookahead), so the full delimited
+  // run is matched at its true bounds — no shifted matches on runs longer than 40 chars. The
+  // class-only lookaheads are gated behind the structural run check, so positions without a
+  // 40+ char run are rejected cheaply — an unbounded (?=.*[x]) lookahead costs a full rescan
+  // of the line at every scan position.
+  /(?<![A-Za-z0-9/+=])(?=[A-Za-z0-9/+=]{40,}(?=\s|$|["']))(?=[A-Za-z0-9/+=]*[a-z])(?=[A-Za-z0-9/+=]*[A-Z])(?=[A-Za-z0-9/+=]*[0-9])[A-Za-z0-9/+=]{40,}(?=\s|$|["'])/g,
   // Slack tokens
   /xox[baprs]-[0-9a-zA-Z-]{10,48}/g,
   // Discord tokens
@@ -40,15 +45,17 @@ const API_KEY_PATTERNS = [
 // These patterns help distinguish between real API keys and documentation examples
 const WHITE_LIST_PATTERNS = [
   // Documentation examples and placeholders
-  /your[_-]?api[_-]?key/gi, // Example: "your-api-key", "your_api_key"
-  /your[_-]?actual[_-]?api[_-]?key/gi, // Example: "your-actual-api-key"
-  /example[_-]?key/gi, // Example: "example-key", "example_key"
-  /test[_-]?api[_-]?key/gi, // Example: "test-api-key", "test_api_key"
-  /demo[_-]?key/gi, // Example: "demo-key", "demo_key"
+  // NOTE: no `g` flag on these — they are only used with RegExp.test(), and a
+  // stateful lastIndex would cause intermittent false negatives across lines.
+  /your[_-]?api[_-]?key/i, // Example: "your-api-key", "your_api_key"
+  /your[_-]?actual[_-]?api[_-]?key/i, // Example: "your-actual-api-key"
+  /example[_-]?key/i, // Example: "example-key", "example_key"
+  /test[_-]?api[_-]?key/i, // Example: "test-api-key", "test_api_key"
+  /demo[_-]?key/i, // Example: "demo-key", "demo_key"
 
   // Template examples that show placeholders
-  /your_.*_key/gi, // Example: "your_actual_key", "your_secret_key"
-  /your_.*_api_key/gi, // Example: "your_gemini_api_key"
+  /your_.*_key/i, // Example: "your_actual_key", "your_secret_key"
+  /your_.*_api_key/i, // Example: "your_gemini_api_key"
 
   // Comment separators and formatting
   /^=+$/, // Example: "=============="
@@ -57,7 +64,7 @@ const WHITE_LIST_PATTERNS = [
   /^#+$/, // Example: "##############"
 
   // Safe empty string API key defaults in configuration
-  /apiKey:\s*""\s*,?/gi, // Example: 'apiKey: "",' or 'apiKey: ""'
+  /apiKey:\s*""\s*,?/i, // Example: 'apiKey: "",' or 'apiKey: ""'
 ];
 
 // Files/directories to exclude from scanning
@@ -145,8 +152,10 @@ const loadCustomWhitelist = async (
     const content = await readFile(whitelistPath, "utf8");
     const lines = content.split("\n").filter((line) => line.trim() !== "");
     return new Set(lines);
-  } catch {
-    return new Set();
+  } catch (error) {
+    // Fail fast: a whitelist file that can't be read must not silently
+    // disable whitelisting — doing so would report unfiltered leaks as new.
+    throw new Error(`Could not read whitelist file ${whitelistPath}: ${error}`);
   }
 };
 
@@ -262,13 +271,16 @@ export function detectAPIKeyLeaks(
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    // The safe-pattern check depends only on the line and its position, so it
+    // is evaluated once per line rather than once per match.
+    const lineIsSafe = isSafePattern(line, content, i + 1);
 
     for (const pattern of API_KEY_PATTERNS) {
       const matches = line.match(pattern);
       if (matches) {
         for (const match of matches) {
           // Skip if it's a safe pattern (environment variable reference, comment, etc.)
-          if (!isSafePattern(line, content, i + 1)) {
+          if (!lineIsSafe) {
             leaks.push({
               line: i + 1,
               match: match,
@@ -292,10 +304,8 @@ export async function detectAPIKeyLeaksWithFiles(
   const { readFile } = await import("fs/promises");
 
   // Get all source files using existing function, passing ignore file path
-  if (null == ignoreFilePath) {
-    ignoreFilePath = `${directory}/.gitignore`;
-  }
-  const files = await getAllSourceFiles(directory, ignoreFilePath);
+  const ignoreFile = ignoreFilePath ?? `${directory}/.gitignore`;
+  const files = await getAllSourceFiles(directory, ignoreFile);
 
   // Load custom whitelist if path provided
   // customWhitelist contains entries like: "src/config.ts:sk-1234567890..." or "docs/api.md:AIzaExample123"
@@ -327,7 +337,8 @@ export async function detectAPIKeyLeaksWithFiles(
 
       allLeaks.push(...leaksWithFile);
     } catch (error) {
-      // Skip files that can't be read
+      // Fail fast: an unreadable file must never be silently skipped from a
+      // security scan — a skipped file would look like a clean file.
       throw new Error(`Could not read file ${filePath}: ${error}`);
     }
   }

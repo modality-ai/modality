@@ -12,7 +12,7 @@ describe("AWS API Keys detection", () => {
   });
 
   test("should detect AWS Secret Keys", () => {
-    // Testing pattern: /(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])[A-Za-z0-9/+=]{40}(?=\s|$|"|')/g
+    // Testing pattern: /(?<![A-Za-z0-9/+=])(?=[A-Za-z0-9/+=]{40,}(?=\s|$|["']))(?=[A-Za-z0-9/+=]*[a-z])(?=[A-Za-z0-9/+=]*[A-Z])(?=[A-Za-z0-9/+=]*[0-9])[A-Za-z0-9/+=]{40,}(?=\s|$|["'])/g
     // Note: AWS Secret Keys have very strict requirements - mixed case, numbers, exactly 40 chars
     const content = 'SECRET_ACCESS_KEY="Aa1bcdefghijklmnopqrstuvwxyz1234567890+=" ';
     const result = detectAPIKeyLeaks(content);
