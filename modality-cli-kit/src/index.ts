@@ -142,11 +142,12 @@ export type {
 // Width-aware text rendering (tables, boxes, wrapping) and the escape/timer
 // vocabulary for in-place `--watch` loops. Color helpers live in the help
 // section above, not here.
-// Width measurement
-export { stripAnsi, displayWidth, charWidth } from "./ui";
-// Text layout
-export { pad, wrapToWidth, renderTable, renderBox, sideBySide } from "./ui";
-export type { Align, TableOptions } from "./ui";
+// Width measurement (CJK, emoji, ANSI-aware)
+export { stripAnsi } from "./ui/strip-ansi";
+export { displayWidth, charWidth } from "./ui/displayWidth";
+// Text layout: pad, wrap, and the table/box/side-by-side renderers
+export { pad, wrapToWidth, renderTable, renderBox, sideBySide } from "./ui/table";
+export type { Align, TableOptions } from "./ui/table";
 // Watch-loop escape codes and status lines
 export {
   CURSOR_HOME,
@@ -156,7 +157,6 @@ export {
   CLEAR_BELOW,
   SET_TITLE,
   BELL,
-  termWidth,
   sleep,
   draw,
   writeTitle,
@@ -166,7 +166,8 @@ export {
   liveStatus,
   errorStatus,
   watchCountdown,
-} from "./ui";
+} from "./ui/terminal";
+export { termWidth } from "./ui/termWidth";
 
 // ── Default Commands ────────────────────────────────────────────────────────
 // Commands `createCliRunner` registers on every CLI's behalf: the `merge`

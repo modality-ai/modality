@@ -1,6 +1,6 @@
 import { describe, expect, test, spyOn } from "bun:test";
 import { displayWidth } from "../displayWidth";
-import { pad, renderTable } from "../table";
+import { pad, renderTable, wrapToWidth } from "../table";
 
 // ── pad ──────────────────────────────────────────────────────────────────────
 
@@ -26,6 +26,65 @@ describe("pad — emoji alignment", () => {
   });
   test("⚡ padded to display width 4 → ⚡ + 2 spaces", () => {
     expect(pad("⚡", 4)).toBe("⚡  ");
+  });
+});
+
+// ── renderTable — RWD: grid / card layout switch ─────────────────────────────
+
+describe("renderTable — RWD", () => {
+  test("wide-enough width renders grid", () => {
+    const logs: string[] = [];
+    const spy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.join(" "));
+    });
+    renderTable(["A", "B"], [["1", "2"]], { width: 40 });
+    spy.mockRestore();
+    expect(logs[0]).toBe("┌───┬───┐");
+    expect(logs[1]).toBe("│ A │ B │");
+  });
+
+  test("slightly-too-narrow width shrinks a wide column but stays grid", () => {
+    const logs: string[] = [];
+    const spy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.join(" "));
+    });
+    // "left-word longword" (17) + "x" (1) + overhead 7 = 25 natural; cap at 20.
+    renderTable(["L", "R"], [["left-word longword", "x"]], { width: 20 });
+    spy.mockRestore();
+    expect(logs[0]!.startsWith("┌")).toBe(true);
+    expect(logs.some((l) => l.includes("longword"))).toBe(true);
+  });
+
+  test("too-narrow width falls back to card layout", () => {
+    const logs: string[] = [];
+    const spy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.join(" "));
+    });
+    renderTable(
+      ["Round", "Gate"],
+      [["1", "ACCEPT_NEW_BEST"]],
+      { width: 24 },
+    );
+    spy.mockRestore();
+    // No grid borders at all.
+    expect(logs.every((l) => !l.startsWith("┌"))).toBe(true);
+    // Colon attached to the label, value on the same line.
+    const cards = logs.filter((l) => l.includes(":"));
+    expect(cards[0]).toBe("Round: 1");
+    expect(cards[1]).toBe("Gate: ACCEPT_NEW_BEST");
+    // Short rule between rows.
+    expect(logs.at(-1)).toMatch(/^─+$/);
+  });
+
+  test("card mode handles CJK labels", () => {
+    const logs: string[] = [];
+    const spy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.join(" "));
+    });
+    renderTable(["Round", "動作"], [["1", "x"]], { width: 10 });
+    spy.mockRestore();
+    expect(logs).toContain("Round: 1");
+    expect(logs).toContain("動作: x");
   });
 });
 
@@ -62,5 +121,17 @@ describe("renderTable — column alignment with emoji in cells", () => {
         expect(w).toBe(first);
       }
     }
+  });
+});
+
+// ── wrapToWidth — word wrap ──────────────────────────────────────────────────
+
+describe("wrapToWidth — word wrap", () => {
+  test("breaks at the last space instead of mid-word", () => {
+    expect(wrapToWidth("hello world foo", 10)).toEqual(["hello", "world foo"]);
+  });
+
+  test("returns the input unchanged when it already fits", () => {
+    expect(wrapToWidth("short", 10)).toEqual(["short"]);
   });
 });
