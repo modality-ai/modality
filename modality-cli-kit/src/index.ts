@@ -186,3 +186,7 @@ export type {
 // The multi-document JSON parsing behind `merge`, usable without it — parse a
 // captured stream directly instead of piping through the command.
 export { splitJsonDocs, mergeJsonDocs } from "./defaultCommands/lib/jsonDocs";
+
+// ── Notifications ──────────────────────────────────────────────────────────
+// Cross-platform notification helpers (macOS osascript banner + Warp OSC 777).
+export * from "./notify";

@@ -1,5 +1,5 @@
 {
-  "version": "0.17.3",
+  "version": "0.18.0",
   "name": "modality-cli-kit",
   "repository": {
     "type": "git",
@@ -7,7 +7,9 @@
   },
   "homepage": "https://github.com/react-atomic/modality",
   "description": "Composable CLI utilities for building Bun/TypeScript command-line tools",
-  "keywords": ["modality-cli-kit"],
+  "keywords": [
+    "modality-cli-kit"
+  ],
   "author": "Hill <hill@kimo.com>",
   "license": "ISC",
   "git.addAICoAuthor": "off",
@@ -55,5 +57,9 @@
     "test": "npm run build && bun test",
     "prepublishOnly": "npm t"
   },
-  "files": ["dist", "package.json", "README.md"]
+  "files": [
+    "dist",
+    "package.json",
+    "README.md"
+  ]
 }
