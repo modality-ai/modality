@@ -2,7 +2,7 @@ import { describe, test, expect, afterEach } from "bun:test";
 import { z } from "zod";
 import { createCliRunner } from "../../createCliRunner";
 import { createCommandRegistry } from "../../registry";
-import { outputFormatEnvNames, resolveOutputFormatFromEnv } from "../output";
+import { outputFormatEnvNames, resolveOutputFormatFromEnv } from "../../output/output";
 import { resolveGlobalOptions, type GlobalOptionName } from "../../globalOptions";
 import { setNoColor } from "../../help/colors";
 import type { CLICommand } from "../../help/types";

@@ -7,7 +7,7 @@ import {
   createOutput,
   type CLIResult,
   type OutputFormat,
-} from "../output";
+} from "../../output/output";
 
 const sampleResult: CLIResult<{ id: number; name: string }> = {
   success: true,

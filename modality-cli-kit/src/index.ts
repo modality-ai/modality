@@ -128,7 +128,7 @@ export {
   formatJSONL,
   formatJSONLItems,
   createOutput,
-} from "./ui/output";
+} from "./output/output";
 export type {
   OutputFormat,
   CLIResult,
@@ -136,7 +136,11 @@ export type {
   ResultMeta,
   OutputWriter,
   OutputOptions,
-} from "./ui/output";
+} from "./output/output";
+
+// Render-mode detection (argv/env). Lives next to the output module.
+export { getRenderMode, isJsonMode } from "./output/renderMode";
+export type { RenderMode } from "./output/renderMode";
 
 // ── Terminal UI ─────────────────────────────────────────────────────────────
 // Width-aware text rendering (tables, boxes, wrapping) and the escape/timer

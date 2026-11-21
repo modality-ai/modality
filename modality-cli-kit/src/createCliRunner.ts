@@ -40,7 +40,7 @@ import {
   resolveOutputFormatFromEnv,
   type CLIResult,
   type OutputFormat,
-} from "./ui/output";
+} from "./output/output";
 import type { CommandRegistry } from "./registry";
 import type { DefaultCommandName } from "./defaultCommands";
 import { takesRawArgv } from "./defaultCommands/internal";
