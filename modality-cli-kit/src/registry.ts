@@ -27,6 +27,8 @@
  * await registry.execute("foo", { target: "x" });
  * ```
  */
+import { z } from "zod";
+import { withGlobalFlags } from "./output/output";
 import type { CLICommand } from "./help/types";
 
 /**
@@ -86,8 +88,15 @@ export function createCommandRegistry(
     .map((cmd): CLICommand & { name: string } => {
       const summary = cmd.summary ?? cmd.description;
       const description = cmd.description ?? cmd.summary;
-      if (summary === cmd.summary && description === cmd.description) return cmd;
-      return { ...cmd, summary, description };
+      // Merge global flags into the command's inputSchema so the MCP/aiTool path
+      // (which uses inputSchema directly) also accepts json/human.
+      let inputSchema = cmd.inputSchema;
+      if (inputSchema instanceof z.ZodObject) {
+        inputSchema = withGlobalFlags(inputSchema);
+      }
+      const enriched = { ...cmd, summary, description, inputSchema } as CLICommand & { name: string };
+      if (summary === cmd.summary && description === cmd.description && inputSchema === cmd.inputSchema) return cmd;
+      return enriched;
     });
 
   // A command may carry its own `aliases`, which is what a directory-scanned

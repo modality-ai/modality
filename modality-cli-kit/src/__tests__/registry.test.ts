@@ -11,7 +11,7 @@ const makeCmd = (name: string | undefined, ret: unknown = { success: true }): CL
     name,
     summary: `${name} command`,
     description: `${name} command`,
-    inputSchema: z.object({}),
+    inputSchema: undefined,
     execute: async (args: unknown) => (ret === "echo" ? args : ret),
   }) as unknown as CLICommand;
 
@@ -138,7 +138,7 @@ describe("createCommandRegistry", () => {
   // ── summary/description backfill ────────────────────────────────────────
 
   const oneLiner = (fields: Partial<CLICommand>): CLICommand =>
-    ({ name: "x", inputSchema: z.object({}), execute: async () => ({}), ...fields }) as unknown as CLICommand;
+    ({ name: "x", inputSchema: undefined, execute: async () => ({}), ...fields }) as unknown as CLICommand;
 
   test("backfills summary from description when summary is absent", () => {
     const registry = createCommandRegistry([oneLiner({ description: "does x" })]);

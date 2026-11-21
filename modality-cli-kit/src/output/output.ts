@@ -13,6 +13,7 @@
  * console.log(formatJSON(envelope, { pretty: true }));
  * ```
  */
+import { z } from "zod";
 
 // ── Format enum ──────────────────────────────────────────────────────────────
 
@@ -313,4 +314,27 @@ export function createOutput<T = unknown>(options?: OutputOptions): OutputWriter
       // so streaming implementations can override.
     },
   };
+}
+
+// ── Global flags ─────────────────────────────────────────────────────────────
+
+export const GlobalFlagsSchema = z.object({
+  json: z.boolean().optional().describe("output JSON (CLIResult envelope, pretty)"),
+  human: z.boolean().optional().describe("render human output instead of JSON"),
+});
+
+export function isJsonFromArgs(args: unknown): boolean | undefined {
+  if (!args || typeof args !== "object") return undefined;
+  const a = args as { json?: unknown; human?: unknown };
+  if (typeof a.json === "boolean") return a.json;
+  if (typeof a.human === "boolean") return !a.human;
+  return undefined;
+}
+
+export function withGlobalFlags<T extends { extend?: (shape: Record<string, z.ZodTypeAny>) => any }>(schema: T): T {
+  const extender = schema as { extend?: (shape: Record<string, z.ZodTypeAny>) => unknown };
+  if (schema && typeof extender.extend === "function") {
+    return extender.extend(GlobalFlagsSchema.shape) as T;
+  }
+  return schema;
 }

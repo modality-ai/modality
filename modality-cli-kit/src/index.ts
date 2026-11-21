@@ -128,6 +128,9 @@ export {
   formatJSONL,
   formatJSONLItems,
   createOutput,
+  GlobalFlagsSchema,
+  isJsonFromArgs,
+  withGlobalFlags,
 } from "./output/output";
 export type {
   OutputFormat,
