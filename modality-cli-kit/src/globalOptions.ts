@@ -21,6 +21,12 @@ const DEFAULT_GLOBAL_OPTIONS = {
   trace: z.boolean().optional().describe("print the runner's dispatch path to stderr"),
 } satisfies Record<string, z.ZodType>;
 
+/** Output flags shared with per-command input schemas. */
+export const GLOBAL_FLAG_SCHEMAS = {
+  json: DEFAULT_GLOBAL_OPTIONS.json,
+  human: DEFAULT_GLOBAL_OPTIONS.human,
+};
+
 /** Name of a global option the runner supplies by default. */
 export type GlobalOptionName = keyof typeof DEFAULT_GLOBAL_OPTIONS;
 

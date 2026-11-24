@@ -14,6 +14,7 @@
  * ```
  */
 import { z } from "zod";
+import { GLOBAL_FLAG_SCHEMAS } from "../globalOptions";
 
 // ── Format enum ──────────────────────────────────────────────────────────────
 
@@ -318,10 +319,7 @@ export function createOutput<T = unknown>(options?: OutputOptions): OutputWriter
 
 // ── Global flags ─────────────────────────────────────────────────────────────
 
-export const GlobalFlagsSchema = z.object({
-  json: z.boolean().optional().describe("output JSON (CLIResult envelope, pretty)"),
-  human: z.boolean().optional().describe("render human output instead of JSON"),
-});
+export const GlobalFlagsSchema = z.object(GLOBAL_FLAG_SCHEMAS);
 
 export function isJsonFromArgs(args: unknown): boolean | undefined {
   if (!args || typeof args !== "object") return undefined;
@@ -331,10 +329,24 @@ export function isJsonFromArgs(args: unknown): boolean | undefined {
   return undefined;
 }
 
-export function withGlobalFlags<T extends { extend?: (shape: Record<string, z.ZodTypeAny>) => any }>(schema: T): T {
-  const extender = schema as { extend?: (shape: Record<string, z.ZodTypeAny>) => unknown };
-  if (schema && typeof extender.extend === "function") {
-    return extender.extend(GlobalFlagsSchema.shape) as T;
+export function withGlobalFlags<T extends { safeExtend?: (shape: Record<string, z.ZodTypeAny>) => unknown; extend?: (shape: Record<string, z.ZodTypeAny>) => unknown }>(schema: T): T {
+  const extender = schema as {
+    shape?: Record<string, z.ZodTypeAny>;
+    safeExtend?: (shape: Record<string, z.ZodTypeAny>) => unknown;
+    extend?: (shape: Record<string, z.ZodTypeAny>) => unknown;
+  };
+  if (!schema) return schema;
+
+  const extra = Object.fromEntries(
+    Object.entries(GlobalFlagsSchema.shape).filter(([key]) => !Object.hasOwn(extender.shape ?? {}, key)),
+  );
+  if (Object.keys(extra).length === 0) return schema;
+
+  if (typeof extender.safeExtend === "function") {
+    return extender.safeExtend(extra) as T;
+  }
+  if (typeof extender.extend === "function") {
+    return extender.extend(extra) as T;
   }
   return schema;
 }

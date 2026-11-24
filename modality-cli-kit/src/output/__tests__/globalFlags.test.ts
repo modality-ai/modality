@@ -49,4 +49,29 @@ describe("withGlobalFlags", () => {
   test("null/undefined-ish schema returned unchanged", () => {
     expect(withGlobalFlags(null as any)).toBeNull();
   });
+
+  test("keeps caller-declared json in refined schemas", () => {
+    const schema = z
+      .object({ verbose: z.boolean().optional(), json: z.string().optional() })
+      .refine((v) => true, { message: "always ok" });
+    const extended = withGlobalFlags(schema);
+    expect(Object.keys((extended as any).shape)).toEqual(["verbose", "json", "human"]);
+    expect((extended as any).safeParse({ json: "x" }).success).toBe(true);
+    expect((extended as any).safeParse({ json: true }).success).toBe(false);
+  });
+
+  test("preserves refinements that read a caller-declared json key", () => {
+    const schema = z
+      .object({ json: z.string() })
+      .refine((v) => v.json.length > 0, { message: "json must not be empty" });
+    const extended = withGlobalFlags(schema);
+    expect(extended.safeParse({ json: "x" }).success).toBe(true);
+    expect(extended.safeParse({ json: "" }).success).toBe(false);
+    expect(extended.safeParse({ json: true }).success).toBe(false);
+  });
+
+  test("returns the original schema when both global flags are declared", () => {
+    const schema = z.object({ json: z.string(), human: z.string() });
+    expect(withGlobalFlags(schema)).toBe(schema);
+  });
 });
