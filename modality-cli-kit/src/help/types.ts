@@ -61,7 +61,12 @@ export interface KeyOverride {
  * flags still apply); sub-command style entries can be listed via
  * `positionals` or custom `usage` lines.
  */
-export interface CLICommand extends AITool<any, z.ZodType> {
+export interface CLICommand<
+  TDeps = unknown,
+  // `any` keeps typed commands assignable to the non-generic CLICommand[] registry API.
+  TCreateArgs = any,
+  TCreateResult = unknown,
+> extends AITool<any, z.ZodType> {
   /** One-line summary shown in the command index (falls back to `description`). */
   summary?: string;
   /** Ordered positional arguments (displayed in help, validated in args). */
@@ -81,6 +86,9 @@ export interface CLICommand extends AITool<any, z.ZodType> {
 
   /** Alternative command names that map to this tool. */
   aliases?: string[];
+
+  // create is intentionally unused by the dispatcher: tests inject deps here; execute binds defaults.
+  create?(deps: TDeps): (args: TCreateArgs) => Promise<TCreateResult>;
 }
 
 /**
