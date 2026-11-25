@@ -48,9 +48,9 @@ import { loadProjectEnv } from "./loadProjectEnv";
 import { plainArgs } from "./ui/strip-ansi";
 
 /**
- * The runner is the last byte boundary before stdout/stderr, so strip here
- * rather than at each help or formatter that may add styling. Unconditional:
- * a TTY makes those sources colorize, while captured output must stay plain.
+ * Command results and errors are data and stay plain. Help is authored with
+ * ANSI styling, so it goes straight to stdout: `help/colors.ts` already decides
+ * whether to colorize based on TTY and NO_COLOR.
  */
 function renderLog(...args: unknown[]): void {
   console.log(...plainArgs(args));
@@ -58,6 +58,10 @@ function renderLog(...args: unknown[]): void {
 
 function renderError(...args: unknown[]): void {
   console.error(...plainArgs(args));
+}
+
+function renderHelp(text: string): void {
+  console.log(text);
 }
 
 /** Options for {@link createCliRunner}. */
@@ -370,7 +374,7 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     const first = rest[0];
     const commandOwnsFlags = first !== undefined && !first.startsWith("-");
     if (!commandOwnsFlags && (rest.includes("--help") || rest.includes("-h"))) {
-      renderLog(cli.getHelp(resolvedName));
+      renderHelp(cli.getHelp(resolvedName));
       return 0;
     }
 
@@ -452,12 +456,12 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
         if (result !== undefined) renderResult(result);
         return 0;
       }
-      renderLog(cli.getHelp());
+      renderHelp(cli.getHelp());
       return 1;
     }
     if (name === "--help" || name === "-h") {
       trace.step("dispatch", "global help");
-      renderLog(cli.getHelp());
+      renderHelp(cli.getHelp());
       return 0;
     }
     if (name === "--version" || name === "-v") {
@@ -490,7 +494,7 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
       } else {
         renderError(`Unknown command: ${name}\n`);
       }
-      renderLog(cli.getHelp());
+      renderHelp(cli.getHelp());
       return 1;
     }
     // Use the resolved name so help, validation, and dispatch all agree
@@ -517,7 +521,7 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
 
     if (rest.includes("--help") || rest.includes("-h")) {
       trace.step("dispatch", `help for ${resolvedName}`);
-      renderLog(cli.getHelp(resolvedName));
+      renderHelp(cli.getHelp(resolvedName));
       return 0;
     }
 
@@ -531,7 +535,7 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     if (warnings.length > 0) {
       trace.step("validation rejected", warnings);
       for (const warning of warnings) renderError(warning);
-      renderLog(`\n${cli.getHelp(resolvedName)}`);
+      renderHelp(`\n${cli.getHelp(resolvedName)}`);
       return 1;
     }
 

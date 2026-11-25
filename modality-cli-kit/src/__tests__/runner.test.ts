@@ -115,7 +115,7 @@ describe("createCliRunner.run", () => {
     expect(logs.join("\n")).toContain("My toolkit");
   });
 
-  test("--help strips ANSI even when help generation is colorized", async () => {
+  test("--help keeps ANSI when help generation is colorized", async () => {
     const prev = setNoColor(false);
     let result: Awaited<ReturnType<typeof runCapturing>>;
     try {
@@ -125,7 +125,20 @@ describe("createCliRunner.run", () => {
     }
     const text = result.logs.join("\n");
     expect(text).toContain("my-cli");
-    expect(text).not.toContain("\x1b[");
+    expect(text).toContain("\x1b[");
+  });
+
+  test("per-command --help keeps ANSI too", async () => {
+    const prev = setNoColor(false);
+    let result: Awaited<ReturnType<typeof runCapturing>>;
+    try {
+      result = await runCapturing(baseOpts(), ["greet", "--help"]);
+    } finally {
+      setNoColor(prev);
+    }
+    const text = result.logs.join("\n");
+    expect(text).toContain("Greet someone");
+    expect(text).toContain("\x1b[");
   });
 
   test("rendered string results are stripped", async () => {

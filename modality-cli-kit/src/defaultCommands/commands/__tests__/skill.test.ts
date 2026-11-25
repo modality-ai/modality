@@ -313,7 +313,7 @@ describe("skill with no method name", () => {
     expect(writes.join("")).toBe("body");
   });
 
-  test("strips ANSI from Counter's help output", async () => {
+  test("preserves ANSI in Counter's help output", async () => {
     const counter = fakeCounter();
     const module = counter.module as unknown as {
       toCounterCLIHelp: () => (args: string[]) => Promise<boolean>;
@@ -330,7 +330,7 @@ describe("skill with no method name", () => {
     });
 
     const { logs } = await executeCapturing(cmd, ["a-method", "--help"]);
-    expect(logs).toEqual(["a-method"]);
+    expect(logs).toEqual(["\x1b[33ma-method\x1b[0m"]);
     expect(counter.calls).toEqual([]);
   });
 

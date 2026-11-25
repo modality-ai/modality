@@ -44,9 +44,9 @@
  * declaration. A static schema cannot express method-specific parameters,
  * which is why validation stays here instead of moving to the runner.
  *
- * Everything this command prints — Counter's method text and help page, plus
- * the default skill file — goes through {@link withoutAnsi}, so a real TTY
- * never leaks escapes into captured or piped output.
+ * Skill text, the default skill file, and Counter's method listing go through
+ * {@link withoutAnsi}, so a real TTY never leaks escapes into captured or piped
+ * output. Counter's per-method help is printed as rendered, keeping its color.
  *
  * `@modality-counter/core` is an *optional* dependency, imported lazily below.
  * A CLI that never sets `methodsDir` never registers this command and never
@@ -118,10 +118,10 @@ const cleanArg = (arg: unknown): unknown =>
   typeof arg === "string" ? stripYamlAnsi(arg) : arg;
 
 /**
- * Counter writes help and skill text straight to stdout, so this is the one
- * boundary where its escapes can be normalized. Strip unconditionally: a TTY
- * makes Counter colorize, while a pipe should not change the bytes either.
- * Writers are restored only after the last overlapping render finishes.
+ * Counter writes skill text and listings straight to stdout, so this is the
+ * boundary where their escapes are normalized. Help is rendered outside it so
+ * its styling survives. Writers are restored only after the last overlapping
+ * render finishes.
  */
 async function withoutAnsi<T>(render: () => Promise<T>): Promise<T> {
   if (barrierDepth === 0) {
@@ -392,7 +392,7 @@ export function createSkillCommand(options: SkillCommandOptions): CLICommand {
 
       // Per-method help is Counter's to render, and asks nothing of the params.
       const showHelp = counter.toCounterCLIHelp(cliName, methodsDir, COLOR_FORMAT, name);
-      if (await withoutAnsi(() => showHelp(methodArgs))) return;
+      if (await showHelp(methodArgs)) return;
 
       const problem = await validate(counter, mdx, method, methodArgs);
       if (problem !== undefined) {
