@@ -1,21 +1,22 @@
 /**
- * `skill` — print the raw skill text for a Counter method.
+ * `skill` — print the skill text for a Counter method.
  *
  * A CLI whose repo carries a Counter `methods/` tree gets this for free: point
  * {@link CliRunnerOptions.methodsDir} at that tree and the runner registers the
  * command, help and all.
  *
  * ```bash
- * my-cli skill                       # print the default skill, or list methods
+ * my-cli skill                       # print the default method's skill, or list methods
  * my-cli skill create-trade-plan     # print one method's skill text
  * my-cli skill <method> --help       # that method's own help
  * my-cli skill <method> --refs       # that method's references
  * ```
  *
  * The no-method behavior is a choice the CLI makes. With
- * {@link SkillCommandOptions.defaultSkillPath} it prints that file — the README
- * a newcomer should read first — straight from disk, without asking Counter for
- * anything. Without it, Counter's method list is the answer, as before.
+ * {@link SkillCommandOptions.defaultSkillPath} — or an auto-detected sibling
+ * file — the method name is read from its frontmatter and passed to Counter, so
+ * `skill` is the exact same call as `skill <method>`. With neither, Counter's
+ * method list is the answer.
  *
  * ## Why this command validates its own argv
  *
@@ -36,6 +37,17 @@
  * which the runner strips before the command sees them — so the only change in
  * behavior is that bad input now stops here instead of reaching the method.
  *
+ * The command's own two flags are declared in a Zod `inputSchema` so the help
+ * generator lists them under Options like any other command's flags. That
+ * schema is help-facing metadata only: the runner hands this command raw argv,
+ * and {@link validate} still checks every flag against the named method's
+ * declaration. A static schema cannot express method-specific parameters,
+ * which is why validation stays here instead of moving to the runner.
+ *
+ * Everything this command prints — Counter's method text and help page, plus
+ * the default skill file — goes through {@link withoutAnsi}, so a real TTY
+ * never leaks escapes into captured or piped output.
+ *
  * `@modality-counter/core` is an *optional* dependency, imported lazily below.
  * A CLI that never sets `methodsDir` never registers this command and never
  * loads Counter — so the kit stays installable without it.
@@ -43,8 +55,11 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { z } from "zod";
+
 import { bold, dim, example, header } from "../../help/colors";
 import type { CLICommand } from "../../help/types";
+import { stripYamlAnsi } from "../../ui/strip-ansi";
 import { markRawArgv } from "../internal";
 import {
   buildMethodParamsSchema,
@@ -69,12 +84,12 @@ export interface SkillCommandOptions {
   methodsDir: string;
   /**
    * Absolute path to the CLI's default skill file (`SKILL.mdx` or `SKILL.md`).
-   * When set, `skill` with no method name prints this file instead of Counter's
-   * method list. The sibling extension is tried when the given spelling is
-   * absent, so a CLI can point at `.mdx` and still run from a `.md` checkout.
+   * When set, `skill` with no method name reads the method name from this
+   * file's frontmatter and delegates to Counter — the same call as naming the
+   * method. The sibling extension is tried when the given spelling is absent.
    * Even when omitted, `skill` auto-detects a `SKILL.mdx`/`SKILL.md` at
-   * `methodsDir/../src/` before falling back to Counter's method list, so a
-   * repository that carries the file needs no option at all.
+   * `methodsDir/../src/`. A file without a method name is printed raw; no file
+   * at all falls back to Counter's method list.
    */
   defaultSkillPath?: string;
   /** Loader for the optional package (default: a dynamic `import()` of it). */
@@ -85,6 +100,65 @@ export interface SkillCommandOptions {
 
 /** The kit's own palette, handed to Counter so its help matches the CLI's. */
 const COLOR_FORMAT = { bold, dim, header, example };
+
+type StdoutWrite = (
+  chunk: string | Uint8Array,
+  encoding?: unknown,
+  callback?: unknown,
+) => boolean;
+
+// Counter writes straight to stdout, so the barrier is process-global. One
+// shared baseline keeps overlapping renders from restoring a stale writer.
+let barrierDepth = 0;
+let baseLog: typeof console.log | undefined;
+let baseError: typeof console.error | undefined;
+let baseWrite: typeof process.stdout.write | undefined;
+
+const cleanArg = (arg: unknown): unknown =>
+  typeof arg === "string" ? stripYamlAnsi(arg) : arg;
+
+/**
+ * Counter writes help and skill text straight to stdout, so this is the one
+ * boundary where its escapes can be normalized. Strip unconditionally: a TTY
+ * makes Counter colorize, while a pipe should not change the bytes either.
+ * Writers are restored only after the last overlapping render finishes.
+ */
+async function withoutAnsi<T>(render: () => Promise<T>): Promise<T> {
+  if (barrierDepth === 0) {
+    baseLog = console.log;
+    baseError = console.error;
+    baseWrite = process.stdout.write;
+    const write = baseWrite.bind(process.stdout) as StdoutWrite;
+
+    console.log = (...args: unknown[]) => baseLog!(...args.map(cleanArg));
+    console.error = (...args: unknown[]) => baseError!(...args.map(cleanArg));
+    process.stdout.write = ((
+      chunk: string | Uint8Array,
+      encoding?: unknown,
+      callback?: unknown,
+    ) => {
+      const clean = typeof chunk === "string" ? stripYamlAnsi(chunk) : chunk;
+      // A callback in the second slot is a valid `write(str, cb)` call; keep it
+      // there instead of shifting it into the callback slot.
+      return typeof encoding === "function"
+        ? write(clean, encoding)
+        : write(clean, encoding, callback);
+    }) as typeof process.stdout.write;
+  }
+  barrierDepth++;
+
+  try {
+    return await render();
+  } finally {
+    barrierDepth--;
+    if (barrierDepth === 0) {
+      console.log = baseLog!;
+      console.error = baseError!;
+      process.stdout.write = baseWrite!;
+      baseLog = baseError = baseWrite = undefined;
+    }
+  }
+}
 
 /**
  * Flags Counter strips before reading a method's params, so they are never
@@ -103,10 +177,24 @@ const COUNTER_OWNED_FLAGS = ["--help", "--json", "--refs"];
  * via the CLI. Both are declared anyway so the accepted surface is stated in
  * one place; a method that declares either name for itself wins the shape.
  */
+const REFS_DESCRIPTION = "List the method's references";
+const REFERENCE_DESCRIPTION = "Print one reference by name";
+
 const COMMAND_PARAMS: MethodParameters = {
-  refs: { type: "boolean", description: "List the method's references" },
-  reference: { type: "string", description: "Print one reference by name" },
+  refs: { type: "boolean", description: REFS_DESCRIPTION },
+  reference: { type: "string", description: REFERENCE_DESCRIPTION },
 };
+
+/**
+ * Help-facing declaration of the command's own flags. The runner never
+ * validates this command against it — raw argv is checked by {@link validate}
+ * against the named method's parameters — but it is the source the help
+ * generator reads, so the flags appear in the standard Options section.
+ */
+const SKILL_OPTIONS_SCHEMA = z.object({
+  refs: z.boolean().optional().describe(REFS_DESCRIPTION),
+  reference: z.string().optional().describe(REFERENCE_DESCRIPTION),
+});
 
 /** Counter's key convention, reversed for display: `dataset_snapshot` → `--dataset-snapshot`. */
 function asFlag(key: string): string {
@@ -133,6 +221,13 @@ function readDefaultSkill(path: string): string | undefined {
     }
   }
   return undefined;
+}
+
+// Counter's own YAML reader lives in the optional package, which this branch
+// deliberately has not imported yet — so the frontmatter name is read here.
+function methodFromSkillText(text: string): string | undefined {
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1];
+  return frontmatter?.match(/^name:\s*["']?\*?([A-Za-z0-9_-]+)["']?\s*$/m)?.[1];
 }
 
 /**
@@ -222,52 +317,44 @@ export function createSkillCommand(options: SkillCommandOptions): CLICommand {
   return markRawArgv({
     name,
     // Kept to one line: the help generator renders this in the command index.
-    description: "Print raw skill text for a Counter method",
+    description: "Print skill text for a Counter method",
+    inputSchema: SKILL_OPTIONS_SCHEMA,
     usage: [
       `${cliName} ${name} <method-name> [--<param> <value>...]`,
       `${cliName} ${name} <method-name> --help`,
       `${cliName} ${name} <method-name> --refs`,
       defaultSkillPath === undefined
-        ? `${cliName} ${name}${" ".repeat(20)}(print the default skill, or list available methods)`
-        : `${cliName} ${name}${" ".repeat(20)}(print the default skill)`,
+        ? `${cliName} ${name}${" ".repeat(20)}(print the default method's skill, or list available methods)`
+        : `${cliName} ${name}${" ".repeat(20)}(print the default method's skill)`,
       "",
       "Parameters are declared by each method; run a method's --help to see them.",
     ],
     examples: [`${cliName} ${name} create-trade-plan`, `${cliName} ${name} <method> --help`],
     async execute(args: string[]): Promise<void> {
-      const method = args[0]?.replace(/^\*/, "");
+      let method = args[0]?.replace(/^\*/, "");
+      let methodArgs = args;
 
-      // No method named: print the default skill, if there is one. An explicit
-      // `defaultSkillPath` wins; otherwise auto-detect `SKILL.mdx`/`SKILL.md`
-      // next to the methods tree (`methodsDir/../src/`). Read straight from
-      // disk, before Counter is loaded — a CLI can ship a skill file without
-      // the optional package, and the file is the answer even if the package
-      // is missing.
+      // A default skill names the method so `skill` is the same Counter call as
+      // `skill <method>`. A file without a name is still printed as-is.
       if (method === undefined) {
-        if (defaultSkillPath !== undefined) {
-          const contents = readDefaultSkill(defaultSkillPath);
-          if (contents === undefined) {
-            process.exitCode = 1;
-            console.error(
-              `${cliName} ${name}: default skill file not found: ${defaultSkillPath}`,
-            );
-            return;
-          }
+        const skillPath = defaultSkillPath ?? join(dirname(methodsDir), "src", "SKILL.mdx");
+        const contents = readDefaultSkill(skillPath);
+        if (contents === undefined && defaultSkillPath !== undefined) {
+          process.exitCode = 1;
+          console.error(`${cliName} ${name}: default skill file not found: ${defaultSkillPath}`);
+          return;
+        }
+        const derived = contents === undefined ? undefined : methodFromSkillText(contents);
+        if (derived !== undefined) {
+          method = derived;
+          methodArgs = [derived, ...args];
+        } else if (contents !== undefined) {
           // Counter prints a method's text with a single trailing newline; match
           // it so the file's own trailing newline does not double up.
-          console.log(contents.replace(/\n+$/, ""));
-          return;
+          return withoutAnsi(async () => {
+            console.log(contents.replace(/\n+$/, ""));
+          });
         }
-        // Auto-detect relative to methodsDir: [project]/src/SKILL.mdx or .md.
-        const autoContents = readDefaultSkill(
-          join(dirname(methodsDir), "src", "SKILL.mdx"),
-        );
-        if (autoContents !== undefined) {
-          console.log(autoContents.replace(/\n+$/, ""));
-          return;
-        }
-        // Neither an explicit nor an auto-detected file: fall through to Counter's
-        // method list below.
       }
 
       let counter: typeof import("@modality-counter/core");
@@ -293,18 +380,21 @@ export function createSkillCommand(options: SkillCommandOptions): CLICommand {
         return;
       }
 
-      const run = () => counter.toCounterCLI(methodsDir, { cliName, command: name })(args);
+      const run = () =>
+        withoutAnsi(() =>
+          counter.toCounterCLI(methodsDir, { cliName, command: name })(methodArgs),
+        );
 
-      // A leading flag — or, without a defaultSkillPath, no method at all —
-      // reaches Counter, which answers with the method list. There are no
-      // params to validate against without a method.
+      // A leading flag — or, without a default skill, no method at all — reaches
+      // Counter, which answers with the method list. There are no params to
+      // validate against without a method.
       if (method === undefined || method.startsWith("-")) return run();
 
       // Per-method help is Counter's to render, and asks nothing of the params.
       const showHelp = counter.toCounterCLIHelp(cliName, methodsDir, COLOR_FORMAT, name);
-      if (await showHelp(args)) return;
+      if (await withoutAnsi(() => showHelp(methodArgs))) return;
 
-      const problem = await validate(counter, mdx, method, args);
+      const problem = await validate(counter, mdx, method, methodArgs);
       if (problem !== undefined) {
         process.exitCode = 1;
         console.error(problem);

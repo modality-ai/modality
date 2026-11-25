@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { stripAnsi } from "../strip-ansi";
+import { stripAnsi, stripYamlAnsi } from "../strip-ansi";
 
 describe("stripAnsi", () => {
   it("returns empty string for undefined", () => {
@@ -83,5 +83,32 @@ describe("stripAnsi OSC sequences", () => {
 
   it("preserves plain text around OSC", () => {
     expect(stripAnsi("before \x1b]0;t\x07 after")).toBe("before  after");
+  });
+});
+
+describe("stripAnsi", () => {
+  it("preserves literal escape-looking text", () => {
+    expect(stripAnsi("\\e[1mred\\e[0m")).toBe("\\e[1mred\\e[0m");
+    expect(stripAnsi("a\n  \\  b")).toBe("a\n  \\  b");
+  });
+});
+
+describe("stripYamlAnsi YAML escapes", () => {
+  it("strips YAML-escaped CSI sequences", () => {
+    expect(stripYamlAnsi("\\e[1m\\e[33mUsage:\\e[0m")).toBe("Usage:");
+    expect(stripYamlAnsi("\\\\e[1m\\\\e[33mUsage:\\\\e[0m")).toBe("Usage:");
+  });
+
+  it("strips YAML-escaped OSC sequences", () => {
+    expect(stripYamlAnsi("\\e]0;title\x07text")).toBe("text");
+    expect(stripYamlAnsi("\\e]0;title\\e\\text")).toBe("text");
+  });
+
+  it("leaves a literal backslash-e without an escape body alone", () => {
+    expect(stripYamlAnsi("\\example")).toBe("\\example");
+  });
+
+  it("removes the YAML fold marker from an indented line", () => {
+    expect(stripYamlAnsi("a\n  \\  b")).toBe("a\n    b");
   });
 });

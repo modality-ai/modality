@@ -179,8 +179,8 @@ export { termWidth } from "./ui/termWidth";
 // ── Default Commands ────────────────────────────────────────────────────────
 // Commands `createCliRunner` registers on every CLI's behalf: the `merge`
 // stdin sink, which folds a piped command chain into one document; `skill`,
-// which prints a Counter method's raw skill text (or the CLI's default skill
-// file when `defaultSkillPath` is set); and `skills`, which lists the methods.
+// which prints a Counter method's unstyled skill text (or delegates to the
+// method named by the CLI's default skill file); and `skills`, which lists them.
 // The last two need `methodsDir`.
 export { createMergeCommand, createSkillCommand, createSkillsCommand } from "./defaultCommands";
 export type {

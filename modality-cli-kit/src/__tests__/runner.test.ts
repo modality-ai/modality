@@ -115,6 +115,61 @@ describe("createCliRunner.run", () => {
     expect(logs.join("\n")).toContain("My toolkit");
   });
 
+  test("--help strips ANSI even when help generation is colorized", async () => {
+    const prev = setNoColor(false);
+    let result: Awaited<ReturnType<typeof runCapturing>>;
+    try {
+      result = await runCapturing(baseOpts(), ["--help"]);
+    } finally {
+      setNoColor(prev);
+    }
+    const text = result.logs.join("\n");
+    expect(text).toContain("my-cli");
+    expect(text).not.toContain("\x1b[");
+  });
+
+  test("rendered string results are stripped", async () => {
+    const painted = {
+      name: "painted",
+      description: "Render colored text",
+      inputSchema: z.object({}),
+      execute: async () => "\x1b[31mred\x1b[0m",
+    } as unknown as CLICommand;
+    const { logs } = await runCapturing(
+      { ...baseOpts(), registry: createCommandRegistry([painted]) },
+      ["painted"],
+    );
+    expect(logs).toEqual(["red"]);
+  });
+
+  test("--json preserves literal escape-looking text", async () => {
+    const literal = {
+      name: "literal",
+      description: "Return JSON-safe text",
+      inputSchema: z.object({}),
+      execute: async () => ({ success: true, result: { text: "\\e[1m" } }),
+    } as unknown as CLICommand;
+    const { logs } = await runCapturing(
+      { ...baseOpts(), registry: createCommandRegistry([literal]) },
+      ["literal", "--json"],
+    );
+    expect(logs.join("\n")).toContain("\\\\e[1m");
+  });
+
+  test("human output preserves literal escape-looking text", async () => {
+    const literal = {
+      name: "literal-human",
+      description: "Return text that looks like an escape",
+      inputSchema: z.object({}),
+      execute: async () => "Use \\e[1m literally",
+    } as unknown as CLICommand;
+    const { logs } = await runCapturing(
+      { ...baseOpts(), registry: createCommandRegistry([literal]) },
+      ["literal-human"],
+    );
+    expect(logs.join("\n")).toBe("Use \\e[1m literally");
+  });
+
   test("-h as the first arg returns 0", async () => {
     const { code } = await runCapturing(baseOpts(), ["-h"]);
     expect(code).toBe(0);

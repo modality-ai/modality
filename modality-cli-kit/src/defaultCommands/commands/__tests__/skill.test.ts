@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, test, expect } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { z } from "zod";
 import { createSkillCommand } from "../skill";
 import { defaultCommandsFor } from "../..";
 import { takesRawArgv } from "../../internal";
@@ -79,8 +80,14 @@ describe("createSkillCommand", () => {
     // there is nothing on the object for a consuming CLI to copy or declare.
     const cmd = createSkillCommand({ methodsDir: "/repo/methods" });
     expect(takesRawArgv(cmd)).toBe(true);
-    expect(cmd.inputSchema).toBeUndefined();
     expect("rawArgs" in cmd).toBe(false);
+  });
+
+  test("declares its own flags in the standard help schema", () => {
+    const schema = createSkillCommand({ methodsDir: "/repo/methods" }).inputSchema;
+    expect(schema).toBeInstanceOf(z.ZodObject);
+    if (!(schema instanceof z.ZodObject)) return;
+    expect(Object.keys(schema.shape)).toEqual(["refs", "reference"]);
   });
 
   test("documents the flags it accepts on top of a method's parameters", () => {
@@ -238,6 +245,27 @@ describe("skill with no method name", () => {
     expect(errs.join("\n")).toContain("demo skill: default skill file not found");
   });
 
+  test("no method delegates to Counter with the name from the default skill file", async () => {
+    const counter = fakeCounter();
+    const skillPath = join(dir, "SKILL.mdx");
+    writeFileSync(
+      skillPath,
+      '---\nname: "*use-stock"\ndescription: guide\n---\n\n# Skill\n',
+    );
+    const cmd = createSkillCommand({
+      cliName: "demo",
+      methodsDir: import.meta.dir,
+      defaultSkillPath: skillPath,
+      importCounter: async () => counter.module,
+      importMdx: async () => counter.mdxModule,
+    });
+
+    const { logs, errs } = await executeCapturing(cmd, []);
+    expect(logs).toEqual([]);
+    expect(errs).toEqual([]);
+    expect(counter.calls).toEqual([["use-stock"]]);
+  });
+
   test("without a defaultSkillPath, still lists Counter's methods", async () => {
     // The pre-existing behavior: no method named is Counter's list.
     const counter = fakeCounter();
@@ -253,8 +281,141 @@ describe("skill with no method name", () => {
     expect(counter.calls).toEqual([[]]);
   });
 
+  test("strips ANSI from Counter's rendered output", async () => {
+    const counter = fakeCounter();
+    const module = counter.module as unknown as {
+      toCounterCLI: () => (args: string[]) => Promise<void>;
+    };
+    module.toCounterCLI = () => async () => {
+      console.log("\x1b[1mheading\x1b[0m");
+      process.stdout.write("\x1b[35mbody\x1b[0m");
+    };
+    const cmd = createSkillCommand({
+      cliName: "demo",
+      methodsDir: dir,
+      importCounter: async () => counter.module,
+      importMdx: async () => counter.mdxModule,
+    });
+
+    const writes: string[] = [];
+    const realWrite = process.stdout.write;
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      writes.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write;
+    let logs: string[] = [];
+    try {
+      ({ logs } = await executeCapturing(cmd, ["a-method"]));
+    } finally {
+      process.stdout.write = realWrite;
+    }
+    expect(logs.join("\n")).toBe("heading");
+    expect(writes.join("")).toBe("body");
+  });
+
+  test("strips ANSI from Counter's help output", async () => {
+    const counter = fakeCounter();
+    const module = counter.module as unknown as {
+      toCounterCLIHelp: () => (args: string[]) => Promise<boolean>;
+    };
+    module.toCounterCLIHelp = () => async (args) => {
+      console.log(`\x1b[33m${args[0]}\x1b[0m`);
+      return true;
+    };
+    const cmd = createSkillCommand({
+      cliName: "demo",
+      methodsDir: dir,
+      importCounter: async () => counter.module,
+      importMdx: async () => counter.mdxModule,
+    });
+
+    const { logs } = await executeCapturing(cmd, ["a-method", "--help"]);
+    expect(logs).toEqual(["a-method"]);
+    expect(counter.calls).toEqual([]);
+  });
+
+  test("strips ANSI from Counter's stderr output", async () => {
+    const counter = fakeCounter();
+    const module = counter.module as unknown as {
+      toCounterCLI: () => (args: string[]) => Promise<void>;
+    };
+    module.toCounterCLI = () => async () => {
+      console.error("\x1b[31mbad\x1b[0m");
+    };
+    const cmd = createSkillCommand({
+      cliName: "demo",
+      methodsDir: dir,
+      importCounter: async () => counter.module,
+      importMdx: async () => counter.mdxModule,
+    });
+
+    const { errs } = await executeCapturing(cmd, ["a-method"]);
+    expect(errs).toEqual(["bad"]);
+  });
+
+  test("strips ANSI from the default skill file", async () => {
+    const skillPath = join(dir, "SKILL.mdx");
+    writeFileSync(skillPath, "\x1b[31mred\x1b[0m\n");
+    const cmd = createSkillCommand({
+      cliName: "demo",
+      methodsDir: dir,
+      defaultSkillPath: skillPath,
+    });
+
+    const { logs } = await executeCapturing(cmd, []);
+    expect(logs).toEqual(["red"]);
+  });
+
+  test("restores stdout only after overlapping renders finish", async () => {
+    const counter = fakeCounter();
+    const module = counter.module as unknown as {
+      toCounterCLI: () => (args: string[]) => Promise<void>;
+    };
+    let entered = 0;
+    let signalFirst!: () => void;
+    const firstStarted = new Promise<void>((resolve) => {
+      signalFirst = resolve;
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    module.toCounterCLI = () => async () => {
+      entered++;
+      if (entered === 1) signalFirst();
+      await gate;
+      console.log("\x1b[1moverlap\x1b[0m");
+    };
+    const cmd = createSkillCommand({
+      cliName: "demo",
+      methodsDir: dir,
+      importCounter: async () => counter.module,
+      importMdx: async () => counter.mdxModule,
+    });
+
+    const originalWrite = process.stdout.write;
+    const cap = captureConsole();
+    try {
+      const execute = cmd.execute as (args: string[]) => Promise<void>;
+      const first = execute(["a-method"]);
+      await firstStarted;
+      expect(process.stdout.write).not.toBe(originalWrite);
+
+      const second = execute(["a-method"]);
+      for (let i = 0; i < 100 && entered < 2; i++) await Bun.sleep(0);
+      expect(entered).toBe(2);
+      release();
+      await Promise.all([first, second]);
+
+      expect(process.stdout.write).toBe(originalWrite);
+      expect(cap.logs).toEqual(["overlap", "overlap"]);
+    } finally {
+      cap.restore();
+    }
+  });
+
   test("without a defaultSkillPath, auto-detects SKILL.mdx next to methodsDir", async () => {
-    // methodsDir/../src/SKILL.mdx exists → print it, without loading Counter.
+    // A SKILL.mdx with no method name prints raw, without loading Counter.
     const srcDir = join(dir, "src");
     const { mkdirSync } = await import("node:fs");
     mkdirSync(srcDir, { recursive: true });
@@ -366,10 +527,10 @@ describe("skill with no method name", () => {
       defaultSkillPath: "/repo/SKILL.mdx",
     });
     expect(listing.usage?.join("\n")).toContain(
-      "(print the default skill, or list available methods)",
+      "(print the default method's skill, or list available methods)",
     );
-    expect(printing.usage?.join("\n")).toContain("(print the default skill)");
-    // The explicit path answers only with the file — it never lists.
+    expect(printing.usage?.join("\n")).toContain("(print the default method's skill)");
+    // Only a file without a method name answers with the file itself.
     expect(printing.usage?.join("\n")).not.toContain("(list available methods)");
   });
 });
@@ -399,7 +560,7 @@ describe("skill registration", () => {
       "/repo/methods",
       "/repo/SKILL.mdx",
     ).find((cmd) => cmd.name === "skill");
-    expect(skill?.usage?.join("\n")).toContain("(print the default skill)");
+    expect(skill?.usage?.join("\n")).toContain("(print the default method's skill)");
   });
 
   test("the runner registers the configured default skill path", () => {
@@ -407,19 +568,28 @@ describe("skill registration", () => {
       methodsDir: "/repo/methods",
       defaultSkillPath: "/repo/SKILL.mdx",
     }).getHelp("skill");
-    expect(help).toContain("(print the default skill)");
+    expect(help).toContain("(print the default method's skill)");
   });
 
   test("registers once methodsDir is supplied", () => {
     const help = makeRunner({ methodsDir: "/repo/methods" }).getHelp();
     expect(help).toContain("skill");
-    expect(help).toContain("Print raw skill text for a Counter method");
+    expect(help).toContain("Print skill text for a Counter method");
   });
 
   test("its help names the consuming CLI", () => {
     expect(makeRunner({ methodsDir: "/repo/methods" }).getHelp("skill")).toContain(
       "demo skill create-trade-plan",
     );
+  });
+
+  test("its help lists its own flags under Options", () => {
+    const help = makeRunner({ methodsDir: "/repo/methods" }).getHelp("skill");
+    const optionsStart = help.indexOf("Options:");
+    expect(optionsStart).toBeGreaterThan(-1);
+    const options = help.slice(optionsStart);
+    expect(options).toContain("--refs");
+    expect(options).toContain("--reference");
   });
 
   test("withoutDefaultCommand drops it even with a methodsDir", () => {
@@ -443,7 +613,7 @@ describe("skill registration", () => {
       cap.restore();
     }
     expect(code).toBe(0);
-    expect(cap.logs.join("\n")).toContain("Print raw skill text for a Counter method");
+    expect(cap.logs.join("\n")).toContain("Print skill text for a Counter method");
   });
 
 });

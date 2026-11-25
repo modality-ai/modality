@@ -45,6 +45,20 @@ import type { CommandRegistry } from "./registry";
 import type { DefaultCommandName } from "./defaultCommands";
 import { takesRawArgv } from "./defaultCommands/internal";
 import { loadProjectEnv } from "./loadProjectEnv";
+import { plainArgs } from "./ui/strip-ansi";
+
+/**
+ * The runner is the last byte boundary before stdout/stderr, so strip here
+ * rather than at each help or formatter that may add styling. Unconditional:
+ * a TTY makes those sources colorize, while captured output must stay plain.
+ */
+function renderLog(...args: unknown[]): void {
+  console.log(...plainArgs(args));
+}
+
+function renderError(...args: unknown[]): void {
+  console.error(...plainArgs(args));
+}
 
 /** Options for {@link createCliRunner}. */
 export interface CliRunnerOptions {
@@ -120,7 +134,7 @@ export interface CliRunnerOptions {
   /**
    * Absolute path to this CLI's Counter `methods/` tree. Supplying it registers
    * the `skill` and `skills` default commands (`my-cli skill <method>`,
-   * `my-cli skills`), which print a method's raw skill text and list the
+   * `my-cli skills`), which print a method's unstyled skill text and list the
    * methods; omit it and neither command exists.
    *
    * It also needs the optional `@modality-counter/core` package installed —
@@ -129,11 +143,12 @@ export interface CliRunnerOptions {
   methodsDir?: string;
   /**
    * Absolute path to this CLI's default skill file (`SKILL.mdx`/`SKILL.md`).
-   * When set, `my-cli skill` with no method name prints that file — raw, read
-   * from disk, without loading Counter — instead of listing methods. The
-   * sibling `.md`/`.mdx` spelling is tried when the given one is absent. Even
-   * when this option is omitted, `skill` auto-detects a `SKILL.mdx`/`SKILL.md`
-   * at `methodsDir/../src/` before falling back to Counter's method list.
+   * When set, `my-cli skill` with no method name reads the method name from the
+   * file's frontmatter and delegates to Counter — the same call as
+   * `my-cli skill <method>`. The sibling `.md`/`.mdx` spelling is tried when the
+   * given one is absent. Even when this option is omitted, `skill` auto-detects
+   * a `SKILL.mdx`/`SKILL.md` at `methodsDir/../src/` before falling back to
+   * Counter's method list. A file without a method name is still printed raw.
    *
    * Only meaningful alongside {@link CliRunnerOptions.methodsDir}, which is
    * what registers the `skill` command in the first place.
@@ -250,8 +265,15 @@ function applyEnvFormat(
 function renderCliResult(result: unknown, format: OutputFormat): void {
   if (result === undefined || result === null) return;
 
+  // Machine formats are data: stripping a literal `\e[…]` payload would turn
+  // it into an escape sequence and delete it. Human text stays unstyled.
+  const write =
+    format === "json" || format === "jsonl"
+      ? (text: string) => console.log(text)
+      : renderLog;
+
   if (typeof result === "string") {
-    if (result.length > 0) console.log(result);
+    if (result.length > 0) write(result);
     return;
   }
 
@@ -264,14 +286,14 @@ function renderCliResult(result: unknown, format: OutputFormat): void {
           ? formatJSONL(envelope)
           : formatHuman(envelope);
     if (text.length === 0) return;
-    if (format === "human" && envelope.success === false) console.error(text);
-    else console.log(text);
+    if (format === "human" && envelope.success === false) renderError(text);
+    else write(text);
     return;
   }
 
   // Non-envelope object: honor the format flag — machine modes stay on one
   // line, human mode pretty-prints.
-  console.log(JSON.stringify(result, null, format === "human" ? 2 : undefined));
+  write(JSON.stringify(result, null, format === "human" ? 2 : undefined));
 }
 
 /** A runner returned by {@link createCliRunner}. */
@@ -348,7 +370,7 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     const first = rest[0];
     const commandOwnsFlags = first !== undefined && !first.startsWith("-");
     if (!commandOwnsFlags && (rest.includes("--help") || rest.includes("-h"))) {
-      console.log(cli.getHelp(resolvedName));
+      renderLog(cli.getHelp(resolvedName));
       return 0;
     }
 
@@ -383,7 +405,7 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     const envFormat = resolveOutputFormatFromEnv(
       cliName,
       process.env,
-      (message) => console.error(message)
+      (message) => renderError(message)
     );
     const argv = applyEnvFormat(rawArgv, envFormat, globalFlags);
     if (envFormat !== undefined) trace.step("env output format", envFormat);
@@ -430,19 +452,19 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
         if (result !== undefined) renderResult(result);
         return 0;
       }
-      console.log(cli.getHelp());
+      renderLog(cli.getHelp());
       return 1;
     }
     if (name === "--help" || name === "-h") {
       trace.step("dispatch", "global help");
-      console.log(cli.getHelp());
+      renderLog(cli.getHelp());
       return 0;
     }
     if (name === "--version" || name === "-v") {
       trace.step("dispatch", "version");
       // The consuming package owns its version, so it comes in through options;
       // say so plainly when it was not supplied rather than inventing one.
-      console.log(
+      renderLog(
         version
           ? `${cliName} v${version}`
           : `${cliName} (version not configured)`
@@ -464,11 +486,11 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
       );
       if (resolution.reason === "ambiguous") {
         const quoted = resolution.candidates.map((c) => `"${c}"`).join(", ");
-        console.error(`Ambiguous command: "${name}" — matches ${quoted}\n`);
+        renderError(`Ambiguous command: "${name}" — matches ${quoted}\n`);
       } else {
-        console.error(`Unknown command: ${name}\n`);
+        renderError(`Unknown command: ${name}\n`);
       }
-      console.log(cli.getHelp());
+      renderLog(cli.getHelp());
       return 1;
     }
     // Use the resolved name so help, validation, and dispatch all agree
@@ -495,7 +517,7 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
 
     if (rest.includes("--help") || rest.includes("-h")) {
       trace.step("dispatch", `help for ${resolvedName}`);
-      console.log(cli.getHelp(resolvedName));
+      renderLog(cli.getHelp(resolvedName));
       return 0;
     }
 
@@ -508,8 +530,8 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     );
     if (warnings.length > 0) {
       trace.step("validation rejected", warnings);
-      for (const warning of warnings) console.error(warning);
-      console.log(`\n${cli.getHelp(resolvedName)}`);
+      for (const warning of warnings) renderError(warning);
+      renderLog(`\n${cli.getHelp(resolvedName)}`);
       return 1;
     }
 
@@ -577,7 +599,7 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     try {
       return await dispatch(rawArgv, trace);
     } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
+      renderError(error instanceof Error ? error.message : String(error));
       // The stack is the answer to "why did it throw *there*", which is a
       // question only someone already tracing is asking.
       if (trace.enabled && error instanceof Error && error.stack) {
