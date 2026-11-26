@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { z } from "zod";
-import { GlobalFlagsSchema, isJsonFromArgs, withGlobalFlags } from "../../output/output";
+import { GlobalFlagsSchema, isJsonFromArgs, withGlobalFlags } from "../output";
 
 describe("GlobalFlagsSchema", () => {
   test("exposes json and human flags", () => {

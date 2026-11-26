@@ -19,7 +19,7 @@
  * every one of those pipelines, so `cli cmd --json --trace | jq` stays valid and
  * the trace still shows up on the terminal.
  */
-import { dim } from "./help/colors";
+import { dim } from "../help/colors";
 
 /** Emits the runner's dispatch path, or does nothing. See the module doc. */
 export interface Tracer {

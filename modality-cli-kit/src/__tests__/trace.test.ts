@@ -1,9 +1,9 @@
 import { afterEach, describe, test, expect } from "bun:test";
 import { z } from "zod";
-import { createTracer } from "../trace";
-import { createCliRunner } from "../createCliRunner";
-import { createCommandRegistry } from "../registry";
-import { resolveGlobalOptions } from "../globalOptions";
+import { createTracer } from "../lib/trace";
+import { createCliRunner } from "../lib/createCliRunner";
+import { createCommandRegistry } from "../lib/registry";
+import { resolveGlobalOptions } from "../lib/globalOptions";
 import { setNoColor } from "../help/colors";
 import type { CLICommand } from "../help/types";
 

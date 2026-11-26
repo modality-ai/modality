@@ -14,7 +14,7 @@
  * ```
  */
 import { z } from "zod";
-import { GLOBAL_FLAG_SCHEMAS } from "../globalOptions";
+import { GLOBAL_FLAG_SCHEMAS } from "../lib/globalOptions";
 
 // ── Format enum ──────────────────────────────────────────────────────────────
 

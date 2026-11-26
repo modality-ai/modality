@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { z } from "zod";
-import { resolveGlobalOptions } from "../globalOptions";
+import { resolveGlobalOptions } from "../lib/globalOptions";
 
 describe("resolveGlobalOptions", () => {
   test("merges the CLI's schema over the defaults", () => {

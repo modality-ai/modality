@@ -2,8 +2,8 @@ import { afterEach, describe, test, expect } from "bun:test";
 import { z } from "zod";
 import { createMergeCommand } from "../merge";
 import { defaultCommandsFor } from "../..";
-import { createCliRunner } from "../../../createCliRunner";
-import { createCommandRegistry } from "../../../registry";
+import { createCliRunner } from "../../../lib/createCliRunner";
+import { createCommandRegistry } from "../../../lib/registry";
 import { setNoColor } from "../../../help/colors";
 import type { CLICommand } from "../../../help/types";
 

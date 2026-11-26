@@ -5,7 +5,7 @@
 // star-export collisions vanish without an error.
 //
 // Note: `getHelp` is deliberately absent from the help list below. It is
-// re-exported from "./getHelp" instead, which shadows the low-level one, so the
+// re-exported from "./lib/getHelp" instead, which shadows the low-level one, so the
 // root import renders exactly what the runner does. Listing both would be a
 // duplicate-export error.
 
@@ -82,41 +82,41 @@ export { buildCliFromTools } from "./help";
 export type { BuildCliFromToolsOptions, CliBuildResult } from "./help";
 
 // Defaults-aware getHelp.
-export { getHelp } from "./getHelp";
-export type { GetCliHelpOptions } from "./getHelp";
+export { getHelp } from "./lib/getHelp";
+export type { GetCliHelpOptions } from "./lib/getHelp";
 // Declare the CLI config once; feed it to both createCliRunner and getHelp.
-export { defineCliConfig } from "./defineCliConfig";
-export type { CliConfig } from "./defineCliConfig";
+export { defineCliConfig } from "./lib/defineCliConfig";
+export type { CliConfig } from "./lib/defineCliConfig";
 
 // Command-file predicate shared by the scanner and the export validator.
 // The reusable export-validation suite lives in "./testing" (it imports
 // bun:test, which must stay out of this bundle).
-export { isCommandFile } from "./command-file";
+export { isCommandFile } from "./lib/command-file";
 
 // ── Command Registry & Runner ────────────────────────────────────────────────
 // Shareable command-registry + argv-dispatch loop so a consuming CLI only
 // supplies its commands and a little config.
-export { createCommandRegistry } from "./registry";
-export type { CommandRegistry, CommandResolution } from "./registry";
+export { createCommandRegistry } from "./lib/registry";
+export type { CommandRegistry, CommandResolution } from "./lib/registry";
 // Directory-scanned registry: the commands folder replaces a hand-written index
 // module, so adding or removing a command is adding or removing a file.
-export { createCommandRegistryFromDir, loadCommandsFromDir, resolveCommandsDir } from "./commandsDir";
-export type { LoadCommandsOptions, ResolveCommandsDirOptions } from "./commandsDir";
+export { createCommandRegistryFromDir, loadCommandsFromDir, resolveCommandsDir } from "./lib/commandsDir";
+export type { LoadCommandsOptions, ResolveCommandsDirOptions } from "./lib/commandsDir";
 // Build-time counterpart: generate a static commands-index module from the same
 // directory, so a bundled CLI renders one shared dependency graph instead of
 // paying per-command entrypoints or a startup directory scan.
-export { generateCommandsIndex } from "./commandsDir";
-export type { GenerateCommandsIndexOptions } from "./commandsDir";
-export { createCliRunner } from "./createCliRunner";
-export type { CliRunner, CliRunnerOptions } from "./createCliRunner";
+export { generateCommandsIndex } from "./lib/commandsDir";
+export type { GenerateCommandsIndexOptions } from "./lib/commandsDir";
+export { createCliRunner } from "./lib/createCliRunner";
+export type { CliRunner, CliRunnerOptions } from "./lib/createCliRunner";
 // Project `.env` loading. `createCliRunner` calls it automatically on `run()`;
 // exported so a CLI that owns its own entry point can call it directly.
-export { loadProjectEnv } from "./loadProjectEnv";
-export type { LoadProjectEnvOptions } from "./loadProjectEnv";
+export { loadProjectEnv } from "./lib/loadProjectEnv";
+export type { LoadProjectEnvOptions } from "./lib/loadProjectEnv";
 // Exported so a CLI that renders help itself (e.g. an MCP-tool help path) can
 // build the same merged global-options view the runner uses.
-export { resolveGlobalOptions } from "./globalOptions";
-export type { GlobalOptionName } from "./globalOptions";
+export { resolveGlobalOptions } from "./lib/globalOptions";
+export type { GlobalOptionName } from "./lib/globalOptions";
 
 // ── CLI Output Types ────────────────────────────────────────────────────────
 // Shared output format types (JSON, human, JSONL) for CLI commands.

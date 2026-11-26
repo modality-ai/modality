@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
-import { loadProjectEnv } from "../loadProjectEnv";
+import { loadProjectEnv } from "../lib/loadProjectEnv";
 
 const KEY = "CLI_KIT_ENV_TEST_VALUE";
 // Empty until a test builds a tree, so cleanup only runs after one did.

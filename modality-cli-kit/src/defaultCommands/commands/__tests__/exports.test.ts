@@ -1,4 +1,4 @@
-import { setupCommandExportValidation } from "../../../command-export-validation";
+import { setupCommandExportValidation } from "../../../lib/command-export-validation";
 
 // Every command module must export exactly one item: its `xxxCommand`. The
 // command object's `execute` is the single entry point — a second export is how

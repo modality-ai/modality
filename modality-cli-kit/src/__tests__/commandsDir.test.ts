@@ -2,7 +2,7 @@ import { describe, test, expect, spyOn, afterEach } from "bun:test";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadCommandsFromDir, createCommandRegistryFromDir, resolveCommandsDir } from "../commandsDir";
+import { loadCommandsFromDir, createCommandRegistryFromDir, resolveCommandsDir } from "../lib/commandsDir";
 
 const FIXTURES = new URL("./fixtures/scanCommands", import.meta.url);
 

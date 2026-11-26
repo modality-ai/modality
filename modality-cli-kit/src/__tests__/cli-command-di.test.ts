@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createCommandRegistry } from "../registry";
+import { createCommandRegistry } from "../lib/registry";
 import type { CLICommand } from "../help/types";
 
 interface TestDeps {

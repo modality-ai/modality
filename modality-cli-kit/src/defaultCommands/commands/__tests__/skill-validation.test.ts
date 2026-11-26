@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, test, expect } from "bun:test";
 import { bunMockModule, clearAllMocks } from "modality-bun-kit";
 import { createSkillCommand } from "../skill";
-import { createCliRunner } from "../../../createCliRunner";
-import { createCommandRegistry } from "../../../registry";
+import { createCliRunner } from "../../../lib/createCliRunner";
+import { createCommandRegistry } from "../../../lib/registry";
 import { setNoColor } from "../../../help/colors";
 import type { CLICommand } from "../../../help/types";
 

@@ -1,13 +1,13 @@
 /**
- * modality-cli bin — the CLI is built into dist/cli.js before tests run (kit
- * `test` runs `build` first), so the test exercises the real bundled entry.
+ * modality-cli bin — the CLI is built into dist/runner/cli.js before tests run
+ * (kit `test` runs `build` first), so the test exercises the real bundled entry.
  */
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const CLI = new URL("../../dist/cli.js", import.meta.url).pathname;
+const CLI = new URL("../../dist/runner/cli.js", import.meta.url).pathname;
 let dir: string;
 let out: string;
 
@@ -48,10 +48,17 @@ describe("modality-cli generate-commands", () => {
     expect(res.stdout.toString()).toContain("generate-commands");
   });
 
+  test("--version reports the package version", () => {
+    const res = run(["--version"]);
+    expect(res.exitCode).toBe(0);
+    expect(res.stdout.toString()).toContain("modality-cli v");
+    expect(res.stdout.toString()).not.toContain("version not configured");
+  });
+
   test("unknown subcommand exits 1 with the message on stderr", () => {
     const res = run(["frobnicate"]);
     expect(res.exitCode).toBe(1);
-    expect(res.stderr.toString()).toContain('unknown command "frobnicate"');
+    expect(res.stderr.toString()).toContain("Unknown command: frobnicate");
   });
 
   test("resolves the consumer project's commands directory by default", () => {
@@ -94,7 +101,7 @@ describe("modality-cli generate-commands", () => {
   test("invalid options exit 1 with a message instead of a stack trace", () => {
     const res = run(["generate-commands", "--bogus"]);
     expect(res.exitCode).toBe(1);
-    expect(res.stderr.toString()).toContain("invalid options");
+    expect(res.stderr.toString()).toContain("Unknown flag --bogus");
     expect(res.stderr.toString()).not.toContain("\n    at ");
   });
 });

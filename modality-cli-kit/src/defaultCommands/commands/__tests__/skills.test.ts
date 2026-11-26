@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { createSkillsCommand } from "../skills";
 import { defaultCommandsFor } from "../..";
 import { takesRawArgv } from "../../internal";
-import { createCliRunner } from "../../../createCliRunner";
-import { createCommandRegistry } from "../../../registry";
+import { createCliRunner } from "../../../lib/createCliRunner";
+import { createCommandRegistry } from "../../../lib/registry";
 import { setNoColor } from "../../../help/colors";
 import type { CLICommand } from "../../../help/types";
 

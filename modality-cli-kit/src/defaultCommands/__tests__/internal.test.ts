@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { markRawArgv, takesRawArgv } from "../internal";
-import { createCommandRegistry } from "../../registry";
+import { createCommandRegistry } from "../../lib/registry";
 import type { CLICommand } from "../../help/types";
 
 // The raw-argv lock is the one place a command can skip runner validation, so

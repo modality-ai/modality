@@ -1,5 +1,5 @@
 {
-  "version": "0.19.2",
+  "version": "0.19.3",
   "name": "modality-cli-kit",
   "repository": {
     "type": "git",
@@ -32,12 +32,12 @@
       "import": "./dist/index.js"
     },
     "./testing": {
-      "types": "./dist/types/testing.d.ts",
+      "types": "./dist/types/lib/testing.d.ts",
       "require": "./dist/testing.js",
       "import": "./dist/testing.js"
     },
     "./strip-ansi": {
-      "types": "./dist/types/strip-ansi.d.ts",
+      "types": "./dist/types/lib/strip-ansi.d.ts",
       "require": "./dist/strip-ansi.js",
       "import": "./dist/strip-ansi.js"
     }
@@ -46,14 +46,15 @@
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "bin": {
-    "modality-cli": "./dist/cli.js"
+    "modality-cli": "./dist/runner/cli.js"
   },
   "scripts": {
     "build:clean": "find ./dist -name '*.*' | xargs rm -rf",
+    "build:commands": "bun src/scripts/build-commands.ts",
     "build:types": "bun tsc -p ./",
-    "build:src": "bun build src/index.ts src/testing.ts src/strip-ansi.ts --outdir dist --target=node --external @modality-counter/core",
-    "build:cli": "bun build src/cli.ts --outdir dist --target=bun --external @modality-counter/core",
-    "build": "bun run build:clean && bun run build:types && bun run build:src && bun run build:cli",
+    "build:src": "bun build src/index.ts --outfile dist/index.js --target=node --external @modality-counter/core && bun build src/lib/testing.ts --outfile dist/testing.js --target=node --external @modality-counter/core && bun build src/lib/strip-ansi.ts --outfile dist/strip-ansi.js --target=node --external @modality-counter/core",
+    "build:cli": "bun build src/runner/cli.ts --outfile dist/runner/cli.js --target=bun --external @modality-counter/core",
+    "build": "bun run build:clean && bun run build:commands && bun run build:types && bun run build:src && bun run build:cli",
     "test": "npm run build && bun test",
     "prepublishOnly": "npm t"
   },

@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { createCliRunner } from "../createCliRunner";
-import { createCommandRegistry } from "../registry";
+import { createCliRunner } from "../lib/createCliRunner";
+import { createCommandRegistry } from "../lib/registry";
 import { setNoColor } from "../help/colors";
 import type { CLICommand } from "../help/types";
 

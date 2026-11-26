@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { z } from "zod";
-import { createCommandRegistry } from "../registry";
+import { createCommandRegistry } from "../lib/registry";
 import type { CLICommand } from "../help/types";
 
 describe("createCommandRegistry global flags enrichment", () => {

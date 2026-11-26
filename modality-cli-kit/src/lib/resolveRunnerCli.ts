@@ -5,12 +5,12 @@
  * go through it, so help output is identical wherever it is rendered.
  */
 import type { z } from "zod";
-import { buildCliFromTools } from "./help/cli-builder";
+import { buildCliFromTools } from "../help/cli-builder";
 import { resolveGlobalOptions } from "./globalOptions";
-import { outputFormatEnvNames, type OutputFormat } from "./output/output";
+import { outputFormatEnvNames, type OutputFormat } from "../output/output";
 import { createCommandRegistry } from "./registry";
-import { defaultCommandsFor } from "./defaultCommands";
-import { markRawArgv, takesRawArgv } from "./defaultCommands/internal";
+import { defaultCommandsFor } from "../defaultCommands";
+import { markRawArgv, takesRawArgv } from "../defaultCommands/internal";
 import type { CliRunnerOptions } from "./createCliRunner";
 
 /**

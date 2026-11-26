@@ -15,7 +15,7 @@
  * all (return `undefined`) when that CLI supplies nothing for it to work on.
  */
 import type { CLICommand } from "../help/types";
-import type { CommandRegistry } from "../registry";
+import type { CommandRegistry } from "../lib/registry";
 import { createMergeCommand } from "./commands/merge";
 import { createSkillCommand } from "./commands/skill";
 import { createSkillsCommand } from "./commands/skills";

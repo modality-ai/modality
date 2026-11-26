@@ -29,8 +29,8 @@
 import type { AITool } from "modality-mcp-kit";
 import type { z } from "zod";
 import { createTracer, type Tracer } from "./trace";
-import type { CLICommand, KeyOverride } from "./help/types";
-import { validateCLICommandArgs } from "./help/zod-cli";
+import type { CLICommand, KeyOverride } from "../help/types";
+import { validateCLICommandArgs } from "../help/zod-cli";
 import type { GlobalOptionName } from "./globalOptions";
 import { FORMAT_FLAG, resolveRunnerCli } from "./resolveRunnerCli";
 import {
@@ -40,12 +40,12 @@ import {
   resolveOutputFormatFromEnv,
   type CLIResult,
   type OutputFormat,
-} from "./output/output";
+} from "../output/output";
 import type { CommandRegistry } from "./registry";
-import type { DefaultCommandName } from "./defaultCommands";
-import { takesRawArgv } from "./defaultCommands/internal";
+import type { DefaultCommandName } from "../defaultCommands";
+import { takesRawArgv } from "../defaultCommands/internal";
 import { loadProjectEnv } from "./loadProjectEnv";
-import { plainArgs } from "./ui/strip-ansi";
+import { plainArgs } from "../ui/strip-ansi";
 
 /**
  * Command results and errors are data and stay plain. Help is authored with

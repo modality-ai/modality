@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
-import { getRenderMode, isJsonMode } from "../../output/renderMode";
-import { outputFormatEnvNames } from "../../output/output";
+import { getRenderMode, isJsonMode } from "../renderMode";
+import { outputFormatEnvNames } from "../output";
 
 describe("getRenderMode", () => {
   test("argv flags take precedence: --jsonl", () => {

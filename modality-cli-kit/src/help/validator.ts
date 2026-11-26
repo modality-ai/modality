@@ -8,7 +8,7 @@
 import { z } from "zod";
 import type { CLICommand, Option } from "./types";
 import { schemaToCliOptions } from "./zod-cli";
-import { resolveGlobalOptions } from "../globalOptions";
+import { resolveGlobalOptions } from "../lib/globalOptions";
 
 // ── Levenshtein distance ───────────────────────────────────────────────────
 

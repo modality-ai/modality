@@ -8,7 +8,7 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { generateCommandsIndex } from "../commandsDir";
+import { generateCommandsIndex } from "../lib/commandsDir";
 
 let dir: string;
 let out: string;
@@ -43,6 +43,22 @@ describe("generateCommandsIndex", () => {
     expect(source).toContain(
       "export const commands: CLICommand[] = [barCommand, fooCommand];",
     );
+  });
+
+  test("imports CLICommand from the package by default, or a custom specifier", async () => {
+    const packaged = await generateCommandsIndex(dir, { out });
+    expect(packaged).toContain(
+      'import type { CLICommand } from "modality-cli-kit";',
+    );
+
+    const internal = await generateCommandsIndex(dir, {
+      out,
+      cliCommandImport: "../help/types",
+    });
+    expect(internal).toContain(
+      'import type { CLICommand } from "../help/types";',
+    );
+    expect(readFileSync(out, "utf-8")).toContain('from "../help/types"');
   });
 
   test("writes the module to out", async () => {

@@ -28,8 +28,8 @@
  * ```
  */
 import { z } from "zod";
-import { withGlobalFlags } from "./output/output";
-import type { CLICommand } from "./help/types";
+import { withGlobalFlags } from "../output/output";
+import type { CLICommand } from "../help/types";
 
 /**
  * Outcome of {@link CommandRegistry.resolve}. On success it carries the

@@ -1,9 +1,9 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { z } from "zod";
-import { createCliRunner } from "../../createCliRunner";
-import { createCommandRegistry } from "../../registry";
+import { createCliRunner } from "../../lib/createCliRunner";
+import { createCommandRegistry } from "../../lib/registry";
 import { outputFormatEnvNames, resolveOutputFormatFromEnv } from "../../output/output";
-import { resolveGlobalOptions, type GlobalOptionName } from "../../globalOptions";
+import { resolveGlobalOptions, type GlobalOptionName } from "../../lib/globalOptions";
 import { setNoColor } from "../../help/colors";
 import type { CLICommand } from "../../help/types";
 

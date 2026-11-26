@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { type Dirent } from "node:fs";
-import { setupCommandExportValidation } from "../command-export-validation";
-import { isCommandFile } from "../command-file";
+import { setupCommandExportValidation } from "../lib/command-export-validation";
+import { isCommandFile } from "../lib/command-file";
 
 // Self-test against the fixtures: foo.ts and index.ts pass the one-export rule;
 // .d.ts, .test.ts, and .spec.ts files are excluded from validation.
