@@ -539,8 +539,8 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
       return 1;
     }
 
-    // validateCLICommandArgs returns unknown; execute accepts the command's
-    // schema type which we cannot know statically.
+    // validateCLICommandArgs returns data with the command's original schema
+    // keys, but statically it is unknown; execute accepts the schema type.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const args = data as any;
     trace.step("validated args", args);

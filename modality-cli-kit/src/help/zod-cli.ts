@@ -652,19 +652,39 @@ export function normalizeSchemaKeys(
   return (changed || removed) ? z.object(normalized) : schema;
 }
 
+// Validation uses kebab keys so CLI flags match, but execute() is typed with
+// the original schema. Restore the original spelling before handing args over;
+// hidden keys are skipped so a colliding global flag cannot resurrect them.
+function restoreOriginalKeys(
+  data: Record<string, unknown>,
+  shape: Record<string, z.ZodType>,
+  keyMap?: Record<string, KeyOverride>,
+): Record<string, unknown> {
+  const restored = { ...data };
+  for (const key of Object.keys(shape)) {
+    if (keyMap?.[key]?.hidden) continue;
+    const kebab = toKebab(key);
+    if (kebab === key || !Object.prototype.hasOwnProperty.call(data, kebab)) continue;
+    restored[key] = data[kebab];
+    delete restored[kebab];
+  }
+  return restored;
+}
+
 /**
  * Validate CLI args against a CLICommand's Zod `inputSchema`.
  *
- * When `command.inputSchema` is set on a ZodObject, it is used directly for
- * validation (with keys normalized from camelCase to kebab-case).  Commands
- * without a schema only accept their `positionals` plus the global default
- * flags (--help, --json, --no-cache), which are automatically included.
+ * Flags are parsed with kebab-case keys (--user-data-dir), then the validated
+ * data is restored to the command's original schema keys (userDataDir) so
+ * execute() receives the command's original schema key spelling.
+ * Commands without a schema only accept their `positionals` plus the global
+ * default flags (--help, --json, --no-cache), which are automatically included.
  * Returns both the typed parsed data and any validation warnings.
  *
  * @example
  * ```ts
- * const result = validateCLICommandArgs(command, ["--timeframe", "5m"]);
- * // result.data → { timeframe: "5m" }
+ * const result = validateCLICommandArgs(command, ["--user-data-dir", "/tmp"]);
+ * // result.data → { userDataDir: "/tmp" }
  * ```
  */
 export function validateCLICommandArgs(
@@ -686,14 +706,14 @@ export function validateCLICommandArgs(
 
   // Use inputSchema directly for validation when available (bypasses a lossy
   // Option[]→schema reconstruction, preserving refinements and
-  // transforms). Keys are normalized to kebab-case so CLI flag tokens like
-  // "--user-data-dir" map to the correct shape key.  Hidden fields (from
-  // keyMap) are excluded so they don't cause false validation failures.
+  // transforms). Keys are normalized to kebab-case only for flag matching.
+  // Hidden fields (from keyMap) are excluded so they don't cause false
+  // validation failures.
+  let originalShape: Record<string, z.ZodType> | undefined;
   if (command?.inputSchema instanceof z.ZodObject) {
-    schema = normalizeSchemaKeys(
-      command.inputSchema as z.ZodObject<Record<string, z.ZodType>>,
-      command.keyMap,
-    );
+    const input = command.inputSchema as z.ZodObject<Record<string, z.ZodType>>;
+    originalShape = input.shape;
+    schema = normalizeSchemaKeys(input, command.keyMap);
   } else {
     // No schema → only positionals are recognized. Positionals always carry a
     // value, so default to a string when no explicit `type` is given (the
@@ -708,11 +728,15 @@ export function validateCLICommandArgs(
     schema = z.object(posShape);
   }
 
-  return parseCliArgs(
+  const { data, warnings } = parseCliArgs(
     mergeDefaultFlags(schema, extraFlags),
     args,
     positionalKeys,
   );
+  return {
+    data: originalShape ? restoreOriginalKeys(data, originalShape, command?.keyMap) : data,
+    warnings,
+  };
 }
 
 /**

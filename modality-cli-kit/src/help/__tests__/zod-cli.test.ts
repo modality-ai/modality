@@ -663,14 +663,15 @@ describe("validateCLICommandArgs", () => {
     expect(warnings).toEqual([]);
   });
 
-  test("normalizes camelCase inputSchema keys for CLI flag matching", () => {
+  test("restores camelCase schema keys after kebab-case flag matching", () => {
     const custom: CLICommand = makeCmd({
       name: "custom",
       summary: "Custom",
       inputSchema: z.object({ userDataDir: z.string().optional() }),
     });
     const { data, warnings } = validateCLICommandArgs(custom, ["--user-data-dir", "/tmp"]);
-    expect(data["user-data-dir"]).toBe("/tmp");
+    expect(data.userDataDir).toBe("/tmp");
+    expect(data).not.toHaveProperty("user-data-dir");
     expect(warnings).toEqual([]);
   });
 
@@ -681,11 +682,11 @@ describe("validateCLICommandArgs", () => {
       inputSchema: z.object({ noCache: z.boolean().default(true) }),
     });
     const { data, warnings } = validateCLICommandArgs(custom, ["--no-cache"]);
-    expect(data["no-cache"]).toBe(false);
+    expect(data.noCache).toBe(false);
     expect(warnings).toEqual([]);
   });
 
-  test("schema-only command: positionalKeys (no explicit positionals) maps args to kebab-ized keys", () => {
+  test("schema-only positionalKeys map to the original camelCase keys", () => {
     const cmd: CLICommand = makeCmd({
       name: "validate",
       summary: "Validate",
@@ -697,8 +698,8 @@ describe("validateCLICommandArgs", () => {
       positionalKeys: ["assetSymbol", "lookbackDays"],
     });
     const { data, warnings } = validateCLICommandArgs(cmd, ["BTC", "5"]);
-    expect(data["asset-symbol"]).toBe("BTC");
-    expect(data["lookback-days"]).toBe(5);
+    expect(data.assetSymbol).toBe("BTC");
+    expect(data.lookbackDays).toBe(5);
     expect(warnings).toEqual([]);
   });
 
@@ -769,6 +770,51 @@ describe("validateCLICommandArgs", () => {
     expect(warnings).toEqual([]);
     // "secret" should NOT be in the normalized schema
     expect(data).not.toHaveProperty("secret");
+  });
+
+  test("keeps kebab-case global flags when the schema has no matching field", () => {
+    const cmd: CLICommand = makeCmd({
+      name: "plain",
+      summary: "Plain",
+      inputSchema: z.object({ token: z.string().optional() }),
+    });
+    const { data, warnings } = validateCLICommandArgs(cmd, ["--token", "abc", "--no-cache"]);
+    expect(data.token).toBe("abc");
+    expect(data["no-cache"]).toBe(false);
+    expect(data).not.toHaveProperty("noCache");
+    expect(warnings).toEqual([]);
+  });
+
+  test("restores every camelCase schema key while keeping unmatched global flags", () => {
+    const cmd: CLICommand = makeCmd({
+      name: "custom",
+      summary: "Custom",
+      inputSchema: z.object({
+        userDataDir: z.string().optional(),
+        maxRetries: z.coerce.number().optional(),
+      }),
+    });
+    const { data } = validateCLICommandArgs(cmd, [
+      "--user-data-dir", "/tmp", "--max-retries", "3", "--json", "--no-cache",
+    ]);
+    expect(data).toEqual({
+      userDataDir: "/tmp",
+      maxRetries: 3,
+      json: true,
+      "no-cache": false,
+    });
+  });
+
+  test("does not restore hidden keyMap fields from colliding global flags", () => {
+    const cmd: CLICommand = makeCmd({
+      name: "hidden-global",
+      summary: "Hidden global",
+      inputSchema: z.object({ noCache: z.boolean().optional() }),
+      keyMap: { noCache: { hidden: true } },
+    });
+    const { data } = validateCLICommandArgs(cmd, ["--no-cache"]);
+    expect(data).not.toHaveProperty("noCache");
+    expect(data["no-cache"]).toBe(false);
   });
 });
 
