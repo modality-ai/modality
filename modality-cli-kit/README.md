@@ -174,12 +174,15 @@ import { resolveAiToolCommand, type AiToolContext } from "modality-cli-kit";
 type SkillProps = z.infer<typeof SkillSchema> & { _ctx?: AiToolContext };
 
 async execute(props: SkillProps) {
-  const { command, ...args } = resolveAiToolCommand(props);
+  const { command, ...args } = resolveAiToolCommand(props, {
+    defaultCommands: runner.defaultCommandNames,
+  });
   if (!command) return cli.getHelp();
-  if (!registry.get(command)) return undefined; // kit default such as `skill`
   return registry.execute(command, args);
 }
 ```
+
+Pass the runner's `defaultCommandNames` so kit defaults (`skill`, `skills`, `merge`) resolve to `undefined` and take the help path. Never hardcode those names: a project command may shadow a default, in which case it is not registered as a default and must stay dispatchable.
 
 Requires `@modality-counter/core` with the `command` context argument on `toCounterCLI`.
 

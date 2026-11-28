@@ -1130,13 +1130,13 @@ describe("createFlatCommandSchema", () => {
 
 describe("resolveAiToolCommand", () => {
   test("keeps the command selector from props and returns the remaining args", () => {
-    const { command, isDefaultCommand, ...args } = resolveAiToolCommand({ command: "foo", target: "x" });
+    const { command, ...args } = resolveAiToolCommand({ command: "foo", target: "x" });
     expect(command).toBe("foo");
     expect(args).toEqual({ target: "x" });
   });
 
   test("falls back to the command Counter passes in props._ctx and strips _ctx", () => {
-    const { command, isDefaultCommand, ...args } = resolveAiToolCommand({
+    const { command, ...args } = resolveAiToolCommand({
       _ctx: { method: "m", command: "skill" },
     });
     expect(command).toBe("skill");
@@ -1178,6 +1178,24 @@ describe("resolveAiToolCommand", () => {
   test("a context without a command yields undefined, not the string", () => {
     // The final guard exists so `String(undefined)` never becomes "undefined".
     expect(resolveAiToolCommand({ _ctx: { method: "m" } }).command).toBeUndefined();
+  });
+
+  test("default commands resolve to undefined without leaking a marker into args", () => {
+    const defaults = { defaultCommands: ["skill", "skills", "merge"] };
+    const resolved: Record<string, unknown>[] = [
+      resolveAiToolCommand({ command: "merge", target: "x", _ctx: { method: "m" } }, defaults),
+      resolveAiToolCommand({ command: null, _ctx: { method: "m", command: "skill" } }, defaults),
+      resolveAiToolCommand({ _ctx: { method: "m", command: "skills" } }, defaults),
+      resolveAiToolCommand({ command: "foo", target: "x" }, defaults),
+      resolveAiToolCommand({ command: "merge", target: "x" }, { defaultCommands: [] }),
+    ];
+    expect(resolved).toStrictEqual([
+      { target: "x", command: undefined },
+      { command: undefined },
+      { command: undefined },
+      { target: "x", command: "foo" },
+      { target: "x", command: "merge" },
+    ]);
   });
 });
 

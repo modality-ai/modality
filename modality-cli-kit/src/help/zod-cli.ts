@@ -857,25 +857,19 @@ export interface AiToolContext {
  * command name Counter hands over in `props._ctx`. `_ctx` is stripped from the
  * returned args. Use as `const { command, ...args } = resolveAiToolCommand(props)`.
  *
- * When `options.defaultCommands` is provided, a resolved command that is one of
- * those default commands is reported via `isDefaultCommand` and `command` is set
- * to `undefined`, so callers can distinguish a cli-kit default command (such as
- * `skill`, `skills`, or `merge`) from a registered project command without
- * hard-coding any command name.
+ * When `options.defaultCommands` is provided, a resolved command matching one
+ * of them is returned as `undefined`: cli-kit defaults (e.g. `skill`, `skills`,
+ * `merge`) are not project commands and must take the empty-invocation path.
  */
 export function resolveAiToolCommand<
   T extends { command?: unknown; _ctx?: AiToolContext },
 >(
   props: T,
   options?: { defaultCommands?: string[] },
-): Omit<T, "command" | "_ctx"> & { command?: string; isDefaultCommand?: boolean } {
+): Omit<T, "command" | "_ctx"> & { command?: string } {
   const { command: selected, _ctx, ...args } = props;
   const command = selected ?? _ctx?.command;
-  const defaultCommands = options?.defaultCommands ?? [];
-  const isDefaultCommand = !!command && defaultCommands.includes(String(command));
-  return {
-    ...args,
-    command: isDefaultCommand ? undefined : (command === undefined || command === null ? undefined : String(command)),
-    isDefaultCommand,
-  };
+  const resolved = command === undefined || command === null ? undefined : String(command);
+  const suppressed = resolved !== undefined && (options?.defaultCommands ?? []).includes(resolved);
+  return { ...args, command: suppressed ? undefined : resolved };
 }
