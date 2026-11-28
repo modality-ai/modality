@@ -1130,13 +1130,13 @@ describe("createFlatCommandSchema", () => {
 
 describe("resolveAiToolCommand", () => {
   test("keeps the command selector from props and returns the remaining args", () => {
-    const { command, ...args } = resolveAiToolCommand({ command: "foo", target: "x" });
+    const { command, isDefaultCommand, ...args } = resolveAiToolCommand({ command: "foo", target: "x" });
     expect(command).toBe("foo");
     expect(args).toEqual({ target: "x" });
   });
 
   test("falls back to the command Counter passes in props._ctx and strips _ctx", () => {
-    const { command, ...args } = resolveAiToolCommand({
+    const { command, isDefaultCommand, ...args } = resolveAiToolCommand({
       _ctx: { method: "m", command: "skill" },
     });
     expect(command).toBe("skill");

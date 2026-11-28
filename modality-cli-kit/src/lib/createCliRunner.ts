@@ -306,6 +306,8 @@ export interface CliRunner {
   run(argv?: string[]): Promise<number>;
   /** Render help for one command (by name/alias) or global help if omitted. */
   getHelp(command?: string): string;
+  /** Names of commands the runner registers by default (e.g. skill, skills, merge). */
+  defaultCommandNames: string[];
 }
 
 /**
@@ -613,5 +615,5 @@ export function createCliRunner(options: CliRunnerOptions): CliRunner {
     }
   }
 
-  return { run, getHelp: cli.getHelp };
+  return { run, getHelp: cli.getHelp, defaultCommandNames: [...defaultNames] };
 }

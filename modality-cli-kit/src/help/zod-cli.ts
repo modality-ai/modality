@@ -856,14 +856,26 @@ export interface AiToolContext {
  * selector in props when the bundle was called directly, otherwise the bare
  * command name Counter hands over in `props._ctx`. `_ctx` is stripped from the
  * returned args. Use as `const { command, ...args } = resolveAiToolCommand(props)`.
+ *
+ * When `options.defaultCommands` is provided, a resolved command that is one of
+ * those default commands is reported via `isDefaultCommand` and `command` is set
+ * to `undefined`, so callers can distinguish a cli-kit default command (such as
+ * `skill`, `skills`, or `merge`) from a registered project command without
+ * hard-coding any command name.
  */
 export function resolveAiToolCommand<
   T extends { command?: unknown; _ctx?: AiToolContext },
->(props: T): Omit<T, "command" | "_ctx"> & { command?: string } {
+>(
+  props: T,
+  options?: { defaultCommands?: string[] },
+): Omit<T, "command" | "_ctx"> & { command?: string; isDefaultCommand?: boolean } {
   const { command: selected, _ctx, ...args } = props;
   const command = selected ?? _ctx?.command;
+  const defaultCommands = options?.defaultCommands ?? [];
+  const isDefaultCommand = !!command && defaultCommands.includes(String(command));
   return {
     ...args,
-    command: command === undefined || command === null ? undefined : String(command),
+    command: isDefaultCommand ? undefined : (command === undefined || command === null ? undefined : String(command)),
+    isDefaultCommand,
   };
 }
